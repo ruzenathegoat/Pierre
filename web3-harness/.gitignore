@@ -10,3 +10,6 @@ node_modules/
 *.db-shm
 dist/
 
+.opensea-key-state.json
+.env.bak.*
+.probe.mjs

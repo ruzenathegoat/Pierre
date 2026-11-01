@@ -16,6 +16,12 @@ This skill defines the standard operating procedures, URL/contract extraction wo
 | `base` | `base` | `ETH` | `MAX_ETH_PER_TX` (`0.05 ETH`) | `https://basescan.org` |
 | `ethereum` | `eth`, `mainnet` | `ETH` | `MAX_ETH_PER_TX` (`0.05 ETH`) | `https://etherscan.io` |
 | `bsc` | `bnb`, `binance` | `BNB` | `MAX_BNB_PER_TX` (`0.15 BNB`) | `https://bscscan.com` |
+| `robinhood` | `rh`, `hood` | `ETH` | `MAX_ETH_PER_TX` (`0.05 ETH`) | `https://robinhoodchain.blockscout.com` |
+
+**Robinhood Chain** = Arbitrum Orbit L2, chainId `4663`, gas in ETH, public RPC `https://rpc.mainnet.chain.robinhood.com` (override with `ROBINHOOD_RPC_URL`). viem ships a `robinhood` chain object, so no custom definition is needed.
+- Uniswap V2 Router02 `0x89e5db8b5aa49aa85ac63f691524311aeb649eba` + WETH9 `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` (verified on-chain: `router.factory()` = `0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f`, `router.WETH()`). V2-style sell path (`swapExactTokensForETHSupportingFeeOnTransferTokens`) works.
+- OpenSea chain slug and DexScreener chainId are both `robinhood` (confirmed via `GET /api/v2/chains` and DexScreener search).
+- Pitfall: web results for Robinhood Chain routers are polluted with unofficial forks and with `UnsupportedProtocol` / old UR addresses. Trust `https://raw.githubusercontent.com/Uniswap/contracts/main/deployments/4663.md`, then confirm on-chain before wiring an address.
 
 ### Hybrid Wallet Routing Rules:
 1. **Binance Agentic Wallet (`baw` CLI with `.ai` Agent ID — Tool: `execute_baw_agentic_trade`):**
@@ -68,9 +74,17 @@ When `watcher.ts` wakes you with a JSON payload containing `"trigger_type": "TRA
 
 ---
 
-## 4. Learned Patterns Log (Self-Patched by Pierre)
+## 4. OpenSea API Key Hygiene
+
+* `OPENSEA_API_KEY` lives in `~/.hermes/web3-harness/.env` (mode 600). `marketplace.ts` re-reads the file on every call, so a key edit takes effect without restarting the gateway or the MCP server.
+* Never print or paste the key in chat. Ask the user to edit `.env` themselves; treat any key pasted in chat as burned and rotate it.
+* Watchdog: `~/.hermes/scripts/opensea_key_watch.py` (cron job "OpenSea API key watchdog", daily 09:10 CST, `no_agent`, silent stdout when healthy). It mints a fresh free-tier key via `POST /api/v2/auth/keys` when the tracked expiry is under 48h, and alerts once per day when blocked.
+* Pitfall: OpenSea serves reads with ANY non-empty `X-API-KEY`, so a 200 probe cannot prove a key is valid. Verify end to end with `inspect_market_orderbook` and check `source === "opensea-v2"` (fallback means no key data).
+* Free keys expire in 7 days; minting is capped at 2 keys/day per IP and returns 429 after that. Cloudflare blocks Python's default user agent (error 1010), so send a normal UA when calling the API from scripts.
+
+## 5. Learned Patterns Log (Self-Patched by Pierre)
 
 <!-- SELF_PATCH_LOG_START -->
-* Initial baseline initialized with `opensea.io`, `four.meme`, `flap.sh`, `pancakeswap.finance` and standard mint/swap selectors.
+* Added `robinhood` (Robinhood Chain, chainId 4663) across `db.ts` normalizeChainName, `getClients`, `marketplace.ts` (OpenSea/DexScreener slug + Uniswap V2 router/WETH9), and `webhook.ts` Blockscout explorer URL. Addresses verified on-chain, not copied from blog posts.
 <!-- SELF_PATCH_LOG_END -->
 
