@@ -1,0 +1,41 @@
+{
+  "name": "web3-harness",
+  "version": "1.0.0",
+  "description": "Pierre Web3 Hermes Trading Agent MCP Execution Harness & HWM Watcher",
+  "type": "module",
+  "main": "src/mcp-server.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "mcp": "tsx src/mcp-server.ts",
+    "watcher": "tsx src/watcher.ts",
+    "keepalive": "tsx src/baw-keepalive.ts",
+    "test:phase1": "tsx src/test-phase1.ts",
+    "test:phase2": "tsx src/test-phase2.ts",
+    "test:phase3": "tsx src/test-phase3.ts",
+    "test:phase4": "tsx src/test-phase4.ts",
+    "test:phase5": "tsx src/test-phase5.ts",
+    "test:phase6": "tsx src/test-phase6-e2e.ts"
+  },
+  "keywords": [
+    "web3",
+    "mcp",
+    "hermes-agent",
+    "viem",
+    "pierre"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^18.0.9",
+    "viem": "^2.57.14",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

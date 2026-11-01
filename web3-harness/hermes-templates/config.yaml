@@ -1,0 +1,12 @@
+model:
+  provider: openrouter
+  default: deepseek/deepseek-v4-flash
+
+mcp_servers:
+  viem_web3_harness:
+    command: "tsx"
+    args:
+      - "/home/ubuntu/.hermes/web3-harness/src/mcp-server.ts"
+    env:
+      NODE_NO_WARNINGS: "1"
+

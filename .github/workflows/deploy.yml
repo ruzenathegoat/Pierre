@@ -1,0 +1,48 @@
+name: Deploy Pierre Web3 Harness to Tencent Lighthouse VPS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-and-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web3-harness
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js & Typecheck
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: web3-harness/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+
+      - name: Deploy to Tencent Cloud Lighthouse via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
+            cd ~/.hermes/web3-harness
+            git fetch origin main
+            git reset --hard origin/main
+            if [ -d "web3-harness" ]; then
+              cd web3-harness
+            fi
+            npm ci --omit=dev
+            pm2 restart price-watcher || pm2 start ecosystem.config.cjs --only price-watcher
+            pm2 restart baw-keepalive || pm2 start ecosystem.config.cjs --only baw-keepalive
+            pm2 restart hermes-discord || pm2 start ecosystem.config.cjs --only hermes-discord
+            pm2 save
+

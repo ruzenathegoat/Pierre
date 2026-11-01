@@ -1,0 +1,21 @@
+{
+  "domains": [
+    "opensea.io",
+    "magiceden.io",
+    "blur.io",
+    "highlight.xyz",
+    "zora.co",
+    "four.meme",
+    "flap.sh",
+    "pancakeswap.finance"
+  ],
+  "selectors": [
+    "0x1249c58b",
+    "0xa0712d68",
+    "0xfb0f3ee1",
+    "0x7ff36ab5",
+    "0xb6f9de95",
+    "0x791ac947",
+    "0x00000000"
+  ]
+}
