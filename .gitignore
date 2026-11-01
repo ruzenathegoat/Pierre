@@ -2,6 +2,8 @@ node_modules/
 **/node_modules/
 .env
 **/.env
+.env.hermes
+**/.env.hermes
 *.db
 **/*.db
 *.db-journal
@@ -14,3 +16,4 @@ node_modules/
 **/.opensea-key-cache.json
 dist/
 **/dist/
+

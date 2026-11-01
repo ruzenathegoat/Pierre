@@ -82,13 +82,26 @@ echo "  -> config.yaml dikonfigurasi dengan model deepseek/deepseek-v4-flash & M
 # 6. Prepare .env files if not present
 echo "[6/6] Memeriksa file .env..."
 if [ ! -f "$HERMES_DIR/.env" ]; then
-  cp "$HARNESS_DIR/hermes-templates/.env.hermes.example" "$HERMES_DIR/.env"
-  echo "  -> Dibuat template $HERMES_DIR/.env"
+  if [ -f "$HARNESS_DIR/hermes-templates/.env" ]; then
+    cp "$HARNESS_DIR/hermes-templates/.env" "$HERMES_DIR/.env"
+    echo "  -> Disalin $HARNESS_DIR/hermes-templates/.env ke $HERMES_DIR/.env"
+  else
+    cp "$HARNESS_DIR/hermes-templates/.env.hermes.example" "$HERMES_DIR/.env"
+    echo "  -> Dibuat template $HERMES_DIR/.env"
+  fi
 fi
+chmod 600 "$HERMES_DIR/.env"
 
 if [ ! -f "$HARNESS_DIR/.env" ]; then
   cp "$HARNESS_DIR/.env.example" "$HARNESS_DIR/.env"
   echo "  -> Dibuat template $HARNESS_DIR/.env"
+fi
+chmod 600 "$HARNESS_DIR/.env"
+
+# Auto-provision free 7-day OpenSea API Key into .env if empty
+if grep -qE '^OPENSEA_API_KEY=\s*$' "$HARNESS_DIR/.env"; then
+  echo "  -> Auto-generating free OpenSea API v2 key ke $HARNESS_DIR/.env..."
+  cd "$HARNESS_DIR" && npm run opensea:key || true
 fi
 
 echo ""

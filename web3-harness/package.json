@@ -9,6 +9,7 @@
     "mcp": "tsx src/mcp-server.ts",
     "watcher": "tsx src/watcher.ts",
     "keepalive": "tsx src/baw-keepalive.ts",
+    "opensea:key": "tsx -e \"import('./src/marketplace.js').then(m => m.getOpenSeaApiKey(true)).then(k => console.log('OPENSEA_API_KEY:', k || 'RATE_LIMITED_WAIT_FOR_COOLDOWN'))\"",
     "test:phase1": "tsx src/test-phase1.ts",
     "test:phase2": "tsx src/test-phase2.ts",
     "test:phase3": "tsx src/test-phase3.ts",

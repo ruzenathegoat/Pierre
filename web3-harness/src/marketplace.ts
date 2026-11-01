@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, '..', '.env'), quiet: true });
 
+const ENV_FILE_PATH = path.resolve(__dirname, '..', '.env');
 const OPENSEA_KEY_CACHE_FILE = path.resolve(__dirname, '..', '.opensea-key-cache.json');
 
 // Default OpenSea Seaport 1.6 Contract & Conduit addresses on EVM (Base, Ethereum, BSC)
@@ -51,35 +52,55 @@ interface CachedOpenSeaKey {
 
 let memoryOpenSeaKey: CachedOpenSeaKey | null = null;
 
+function persistOpenSeaKeyToEnvFile(apiKey: string): void {
+  process.env.OPENSEA_API_KEY = apiKey;
+  if (!fs.existsSync(ENV_FILE_PATH)) return;
+  try {
+    const content = fs.readFileSync(ENV_FILE_PATH, 'utf-8');
+    if (/^OPENSEA_API_KEY=.*$/m.test(content)) {
+      const updated = content.replace(/^OPENSEA_API_KEY=.*$/m, `OPENSEA_API_KEY=${apiKey}`);
+      fs.writeFileSync(ENV_FILE_PATH, updated, 'utf-8');
+    } else {
+      fs.appendFileSync(ENV_FILE_PATH, `\nOPENSEA_API_KEY=${apiKey}\n`, 'utf-8');
+    }
+  } catch {
+    // Ignore file write errors
+  }
+}
+
 /**
  * Retrieves an OpenSea API v2 key.
- * Uses OPENSEA_API_KEY from .env if set; otherwise auto-generates and caches a free 7-day key
- * via POST https://api.opensea.io/api/v2/auth/keys.
+ * Uses OPENSEA_API_KEY from .env if set; otherwise auto-generates, caches, and writes a free 7-day key
+ * into .env via POST https://api.opensea.io/api/v2/auth/keys.
  */
-export async function getOpenSeaApiKey(): Promise<string | undefined> {
-  const envKey = process.env.OPENSEA_API_KEY?.trim();
-  if (envKey && envKey.length > 5 && !envKey.includes('YOUR_')) {
-    return envKey;
-  }
+export async function getOpenSeaApiKey(forceRefresh = false): Promise<string | undefined> {
+  if (!forceRefresh) {
+    const envKey = process.env.OPENSEA_API_KEY?.trim();
+    if (envKey && envKey.length > 5 && !envKey.includes('YOUR_')) {
+      return envKey;
+    }
 
-  const now = Date.now();
-  if (memoryOpenSeaKey && memoryOpenSeaKey.expiresAt > now) {
-    return memoryOpenSeaKey.apiKey;
-  }
+    const now = Date.now();
+    if (memoryOpenSeaKey && memoryOpenSeaKey.expiresAt > now) {
+      return memoryOpenSeaKey.apiKey;
+    }
 
-  if (fs.existsSync(OPENSEA_KEY_CACHE_FILE)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(OPENSEA_KEY_CACHE_FILE, 'utf-8')) as CachedOpenSeaKey;
-      if (raw.apiKey && raw.expiresAt > now) {
-        memoryOpenSeaKey = raw;
-        return raw.apiKey;
+    if (fs.existsSync(OPENSEA_KEY_CACHE_FILE)) {
+      try {
+        const raw = JSON.parse(fs.readFileSync(OPENSEA_KEY_CACHE_FILE, 'utf-8')) as CachedOpenSeaKey;
+        if (raw.apiKey && raw.expiresAt > now) {
+          memoryOpenSeaKey = raw;
+          persistOpenSeaKeyToEnvFile(raw.apiKey);
+          return raw.apiKey;
+        }
+      } catch {
+        // Ignore corrupted cache file
       }
-    } catch {
-      // Ignore corrupted cache file
     }
   }
 
   try {
+    const now = Date.now();
     const res = await fetch('https://api.opensea.io/api/v2/auth/keys', {
       method: 'POST',
       headers: { Accept: 'application/json' },
@@ -99,7 +120,8 @@ export async function getOpenSeaApiKey(): Promise<string | undefined> {
         } catch {
           // Ignore file write errors
         }
-        console.error('[Marketplace] Auto-provisioned free 7-day OpenSea API v2 key.');
+        persistOpenSeaKeyToEnvFile(key);
+        console.error('[Marketplace] Auto-provisioned free 7-day OpenSea API v2 key & synced to .env.');
         return key;
       }
     }
@@ -132,7 +154,16 @@ async function openSeaFetch(url: string, init?: RequestInit): Promise<Response> 
     headers['x-api-key'] = apiKey;
   }
 
-  const res = await fetch(url, { ...init, headers });
+  let res = await fetch(url, { ...init, headers });
+
+  if (res.status === 401) {
+    console.error('[Marketplace] OpenSea API key expired (401). Auto-rotating free 7-day key...');
+    const refreshedKey = await getOpenSeaApiKey(true);
+    if (refreshedKey) {
+      headers['x-api-key'] = refreshedKey;
+      res = await fetch(url, { ...init, headers });
+    }
+  }
 
   const remaining = res.headers.get('x-ratelimit-remaining');
   const reset = res.headers.get('x-ratelimit-reset');
