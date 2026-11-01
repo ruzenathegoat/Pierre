@@ -38,12 +38,12 @@ async function runPhase5Verification() {
   const configYaml = fs.readFileSync(configYamlPath, 'utf-8');
   if (
     !configYaml.includes('provider: openrouter') ||
-    !configYaml.includes('default: deepseek/deepseek-v4-flash') ||
+    !configYaml.includes('default: deepseek/deepseek-v4.1-flash-1017') ||
     !configYaml.includes('viem_web3_harness:')
   ) {
-    throw new Error('config.yaml belum memiliki konfigurasi OpenRouter deepseek-v4-flash & viem_web3_harness');
+    throw new Error('config.yaml belum memiliki konfigurasi OpenRouter deepseek-v4.1-flash-1017 & viem_web3_harness');
   }
-  console.error('[1] hermes-templates/config.yaml (OpenRouter + DeepSeek V4 Flash + MCP) verified.');
+  console.error('[1] hermes-templates/config.yaml (OpenRouter + DeepSeek V4.1 Flash 1017 + MCP) verified.');
 
   const serverScript = path.resolve(__dirname, 'mcp-server.ts');
   const tsxCli = path.resolve(rootDir, 'node_modules', 'tsx', 'dist', 'cli.mjs');

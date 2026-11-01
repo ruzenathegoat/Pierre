@@ -67,7 +67,7 @@ TSX_BIN="$(command -v tsx)"
 cat > "$HERMES_DIR/config.yaml" <<EOF
 model:
   provider: openrouter
-  default: deepseek/deepseek-v4-flash
+  default: deepseek/deepseek-v4.1-flash-1017
 
 mcp_servers:
   viem_web3_harness:
@@ -77,7 +77,7 @@ mcp_servers:
     env:
       NODE_NO_WARNINGS: "1"
 EOF
-echo "  -> config.yaml dikonfigurasi dengan model deepseek/deepseek-v4-flash & MCP path ${HARNESS_DIR}/src/mcp-server.ts"
+echo "  -> config.yaml dikonfigurasi dengan model deepseek/deepseek-v4.1-flash-1017 & MCP path ${HARNESS_DIR}/src/mcp-server.ts"
 
 # 6. Prepare .env files if not present
 echo "[6/6] Memeriksa file .env..."
