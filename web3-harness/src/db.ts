@@ -56,7 +56,7 @@ db.exec(`
   );
 `);
 
-export type ChainName = 'base' | 'ethereum' | 'bsc';
+export type ChainName = 'base' | 'ethereum' | 'bsc' | 'robinhood';
 export type AssetType = 'ERC721' | 'ERC1155' | 'ERC20';
 export type TradeActionType = 'BUY' | 'MINT' | 'CLAIM' | 'AUTO_SELL' | 'EMERGENCY_SELL';
 
@@ -65,7 +65,11 @@ export function normalizeChainName(chain: string): ChainName {
   if (c === 'bsc' || c === 'bnb' || c === 'binance') return 'bsc';
   if (c === 'eth' || c === 'ethereum' || c === 'mainnet') return 'ethereum';
   if (c === 'base') return 'base';
-  throw new Error(`Unsupported chain "${chain}". Supported chains: base, ethereum, bsc (bnb).`);
+  // Robinhood Chain: Arbitrum Orbit L2, chainId 4663, gas in ETH
+  if (c === 'robinhood' || c === 'rh' || c === 'robinhood-chain' || c === 'hood') return 'robinhood';
+  throw new Error(
+    `Unsupported chain "${chain}". Supported chains: base, ethereum, bsc (bnb), robinhood.`
+  );
 }
 
 export interface NewTradeInput {

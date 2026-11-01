@@ -20,7 +20,7 @@ import {
   type Hex,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { base, bsc, mainnet } from 'viem/chains';
+import { base, bsc, mainnet, robinhood } from 'viem/chains';
 import { z } from 'zod';
 import {
   closePosition,
@@ -114,14 +114,22 @@ export function getClients(rawChain: string) {
   const chainName: ChainName = normalizeChainName(rawChain);
 
   const chainConfig =
-    chainName === 'base' ? base : chainName === 'bsc' ? bsc : mainnet;
+    chainName === 'base'
+      ? base
+      : chainName === 'bsc'
+        ? bsc
+        : chainName === 'robinhood'
+          ? robinhood
+          : mainnet;
 
   const rpcUrl =
     chainName === 'base'
       ? process.env.BASE_RPC_URL?.trim() || 'https://mainnet.base.org'
       : chainName === 'bsc'
         ? process.env.BSC_RPC_URL?.trim() || 'https://bsc-dataseed.bnbchain.org'
-        : process.env.ETH_RPC_URL?.trim() || 'https://eth.llamarpc.com';
+        : chainName === 'robinhood'
+          ? process.env.ROBINHOOD_RPC_URL?.trim() || 'https://rpc.mainnet.chain.robinhood.com'
+          : process.env.ETH_RPC_URL?.trim() || 'https://eth.llamarpc.com';
 
   const publicClient = createPublicClient({
     chain: chainConfig,
@@ -226,7 +234,7 @@ server.registerTool(
   {
     title: 'Get Active Open Positions',
     description:
-      'Queries SQLite trades.db for all currently OPEN positions including exact entry prices, High-Water Mark (HWM), chain (base, ethereum, bsc), and token IDs.',
+      'Queries SQLite trades.db for all currently OPEN positions including exact entry prices, High-Water Mark (HWM), chain (base, ethereum, bsc, robinhood), and token IDs.',
     inputSchema: {},
   },
   async () => {
@@ -258,9 +266,9 @@ server.registerTool(
   {
     title: 'Inspect Live Market Orderbook & Bids',
     description:
-      'Fetches real-time Best Bid, Top 3 Bids Depth, Floor Price, and 1h Sales Velocity via Free-Tier OpenSea API v2 (for NFTs) or DexScreener API (for ERC20/BEP20 tokens) across base, ethereum, and bsc.',
+      'Fetches real-time Best Bid, Top 3 Bids Depth, Floor Price, and 1h Sales Velocity via Free-Tier OpenSea API v2 (for NFTs) or DexScreener API (for ERC20/BEP20 tokens) across base, ethereum, bsc, and robinhood (Robinhood Chain).',
     inputSchema: {
-      chain: z.string().describe('Target blockchain: "base", "ethereum", or "bsc" ("bnb")'),
+      chain: z.string().describe('Target blockchain: "base", "ethereum", "bsc" ("bnb"), or "robinhood" (Robinhood Chain, chainId 4663)'),
       contractAddress: z.string().describe('Contract address (0x...)'),
       tokenId: z.string().optional().describe('Optional NFT token ID'),
       assetType: z
@@ -308,9 +316,9 @@ server.registerTool(
   {
     title: 'Simulate and Prepare Web3 Transaction',
     description:
-      'Mandatory dry-run simulation (eth_call + estimateGas) and spending cap guardrail before any write transaction on base, ethereum, or bsc. Stores valid transaction in SQLite with a 5-minute TTL.',
+      'Mandatory dry-run simulation (eth_call + estimateGas) and spending cap guardrail before any write transaction on base, ethereum, bsc, or robinhood (Robinhood Chain). Stores valid transaction in SQLite with a 5-minute TTL.',
     inputSchema: {
-      chain: z.string().describe('Blockchain name: "base", "ethereum", or "bsc" ("bnb")'),
+      chain: z.string().describe('Blockchain name: "base", "ethereum", "bsc" ("bnb"), or "robinhood" (Robinhood Chain, chainId 4663)'),
       contractAddress: z.string().describe('Target contract address (0x...)'),
       calldata: z.string().describe('Hex encoded calldata (0x...)'),
       valueEth: z.string().describe('Native currency value to send (in ETH or BNB, e.g. "0.01")'),

@@ -68,6 +68,19 @@ function persistOpenSeaKeyToEnvFile(apiKey: string): void {
   }
 }
 
+function readEnvFileOpenSeaKey(): string | undefined {
+  try {
+    if (!fs.existsSync(ENV_FILE_PATH)) return undefined;
+    const content = fs.readFileSync(ENV_FILE_PATH, 'utf-8');
+    const m = content.match(/^OPENSEA_API_KEY=(.*)$/m);
+    const v = m?.[1]?.trim().replace(/^["']|["']$/g, '');
+    if (v && v.length > 5 && !v.includes('YOUR_')) return v;
+  } catch {
+    // Ignore read errors
+  }
+  return undefined;
+}
+
 /**
  * Retrieves an OpenSea API v2 key.
  * Uses OPENSEA_API_KEY from .env if set; otherwise auto-generates, caches, and writes a free 7-day key
@@ -75,6 +88,14 @@ function persistOpenSeaKeyToEnvFile(apiKey: string): void {
  */
 export async function getOpenSeaApiKey(forceRefresh = false): Promise<string | undefined> {
   if (!forceRefresh) {
+    // .env is the source of truth: re-read it every call so a key edited on disk
+    // is picked up without restarting the long-running harness process.
+    const fileKey = readEnvFileOpenSeaKey();
+    if (fileKey) {
+      process.env.OPENSEA_API_KEY = fileKey;
+      return fileKey;
+    }
+
     const envKey = process.env.OPENSEA_API_KEY?.trim();
     if (envKey && envKey.length > 5 && !envKey.includes('YOUR_')) {
       return envKey;
@@ -135,12 +156,16 @@ export async function getOpenSeaApiKey(forceRefresh = false): Promise<string | u
 function toOpenSeaChain(chain: ChainName): string {
   if (chain === 'bsc') return 'bsc';
   if (chain === 'base') return 'base';
+  // OpenSea slug for Robinhood Chain (chainId 4663) is "robinhood"
+  if (chain === 'robinhood') return 'robinhood';
   return 'ethereum';
 }
 
 function toDexScreenerChain(chain: ChainName): string {
   if (chain === 'bsc') return 'bsc';
   if (chain === 'base') return 'base';
+  // DexScreener chainId for Robinhood Chain is "robinhood"
+  if (chain === 'robinhood') return 'robinhood';
   return 'ethereum';
 }
 
@@ -560,6 +585,15 @@ export function getDexRouterAndWrappedNative(chain: ChainName): {
       // Uniswap V2 Router & WETH on Base
       router: '0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24',
       wrappedNative: '0x4200000000000000000000000000000000000006',
+    };
+  }
+  if (chain === 'robinhood') {
+    return {
+      // Uniswap V2 Router02 & WETH9 on Robinhood Chain (chainId 4663).
+      // Source: Uniswap/contracts deployments/4663.md; verified on-chain 2026-11-02 via
+      // router.factory() == 0x8bcEaA40B9AcdfAedF85AdF4FF01F5Ad6517937f and router.WETH().
+      router: '0x89e5db8b5aa49aa85ac63f691524311aeb649eba',
+      wrappedNative: '0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73',
     };
   }
   return {

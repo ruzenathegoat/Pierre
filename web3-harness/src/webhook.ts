@@ -20,7 +20,7 @@ export type WebhookChannel = 'positions' | 'order-execution' | 'pnl' | (string &
 
 export interface DiscordBroadcastPayload {
   action: TradeActionType | string;
-  chain: 'base' | 'ethereum' | 'bsc' | string;
+  chain: 'base' | 'ethereum' | 'bsc' | 'robinhood' | string;
   assetName: string;
   contractAddress: string;
   tokenId?: string;
@@ -72,6 +72,9 @@ export function getExplorerTxUrl(chain: string, txHash: string): string {
   }
   if (normalized === 'bsc' || normalized === 'bnb') {
     return `https://bscscan.com/tx/${txHash}`;
+  }
+  if (normalized === 'robinhood' || normalized === 'rh') {
+    return `https://robinhoodchain.blockscout.com/tx/${txHash}`;
   }
   return `https://etherscan.io/tx/${txHash}`;
 }
