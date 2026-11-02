@@ -16,4 +16,8 @@ node_modules/
 **/.opensea-key-cache.json
 dist/
 **/dist/
+__pycache__/
+**/__pycache__/
+*.pyc
+**/*.pyc
 
