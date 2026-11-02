@@ -29,7 +29,7 @@ except ImportError:
     sys.exit(0)          # silent: a cron crash here must not page anyone
 
 STATE = os.path.expanduser("~/.hermes/cache/agent_mint_radar_state.json")
-PREVIEW_WEBHOOK_ENV = os.path.expanduser("~/.hermes/secrets/positions_webhook_preview.env")
+RADAR_WEBHOOK_ENV = os.path.expanduser("~/.hermes/secrets/positions_webhook_radar.env")
 HARNESS_ENV = os.path.expanduser("~/.hermes/web3-harness/.env")
 
 RPCS = ["https://rpc-bsc.48.club", "https://bsc-dataseed.binance.org"]
@@ -62,8 +62,8 @@ MINT_TOPIC = None
 
 def read_webhook_url():
     for path, keys in [
-        (PREVIEW_WEBHOOK_ENV, ("WEBHOOK_URL", "DISCORD_WEBHOOK_PREVIEW_TOKEN")),
-        (HARNESS_ENV, ("DISCORD_WEBHOOK_PREVIEW_TOKEN", "DISCORD_WEBHOOK_POSITIONS")),
+        (RADAR_WEBHOOK_ENV, ("WEBHOOK_URL", "DISCORD_WEBHOOK_MINT_RADAR")),
+        (HARNESS_ENV, ("DISCORD_WEBHOOK_MINT_RADAR",)),
     ]:
         if not os.path.exists(path):
             continue
@@ -434,14 +434,15 @@ def main():
         st["alerts"] = {k: v for k, v in alerts.items() if now - v < 30 * 86400}
     save_state(st)
 
+    wh_code = 0
     if embeds:
         webhook_url = read_webhook_url()
-        post_webhook(webhook_url, {
+        wh_code = post_webhook(webhook_url, {
             "username": "Pierre  |  Mint Radar",
             "embeds": embeds[:6],
         })
 
-    if messages:
+    if messages and (wh_code not in (200, 204) or "--verbose" in sys.argv):
         print("\n\n".join(messages[:6]))
     return 0
 
