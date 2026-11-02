@@ -50,11 +50,11 @@ export interface PositionWebhookPayload {
 }
 
 const ACTION_COLORS: Record<string, number> = {
-  BUY: 0x3b82f6,            // Blue
-  MINT: 0x8b5cf6,           // Purple
-  CLAIM: 0x10b981,          // Emerald Green
-  AUTO_SELL: 0xf59e0b,      // Amber Gold
-  EMERGENCY_SELL: 0xef4444, // Red
+  BUY: 0x1e1e23,            // Obsidian Slate
+  MINT: 0xc79f53,           // Champagne Gold
+  CLAIM: 0x10b981,          // Emerald
+  AUTO_SELL: 0xc79f53,      // Champagne Gold
+  EMERGENCY_SELL: 0xdc3545, // Muted Crimson
 };
 
 export function getNativeCurrencySymbol(chain: string): 'ETH' | 'BNB' {
@@ -161,52 +161,60 @@ export async function broadcastPositionUpdate(payload: PositionWebhookPayload): 
   const roiSign = unrealizedRoiPct >= 0 ? '+' : '';
 
   const colorMap: Record<PositionWebhookPayload['event'], number> = {
-    POSITION_OPENED: 0x22c55e,     // Green
-    HWM_UPDATED: 0x3b82f6,         // Blue
-    TRAILING_PEAK_ALERT: 0xf59e0b, // Amber
-    POSITION_CLOSED: 0x64748b,     // Slate
+    POSITION_OPENED: 0x10b981,     // Emerald
+    HWM_UPDATED: 0x1e1e23,         // Obsidian Slate
+    TRAILING_PEAK_ALERT: 0xc79f53, // Champagne Gold
+    POSITION_CLOSED: 0x2f3136,     // Matte Slate
+  };
+
+  const labelMap: Record<PositionWebhookPayload['event'], string> = {
+    POSITION_OPENED: 'POSITION OPENED',
+    HWM_UPDATED: 'HIGH-WATER MARK UPDATED',
+    TRAILING_PEAK_ALERT: 'TRAILING PEAK ALERT',
+    POSITION_CLOSED: 'POSITION CLOSED',
   };
 
   const fields: Array<{ name: string; value: string; inline?: boolean }> = [
-    { name: 'Position ID', value: `\`#${payload.positionId}\``, inline: true },
-    { name: 'Status', value: `\`${payload.status}\``, inline: true },
-    { name: 'Chain', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
+    { name: 'POSITION', value: `\`#${payload.positionId}\``, inline: true },
+    { name: 'STATUS', value: `\`${payload.status}\``, inline: true },
+    { name: 'NETWORK', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
     {
-      name: 'Entry Price',
-      value: `**${payload.entryPriceEth.toFixed(4)} ${symbol}**`,
+      name: 'ENTRY',
+      value: `\`${payload.entryPriceEth.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'High-Water Mark (HWM)',
-      value: `**${payload.highWaterMarkEth.toFixed(4)} ${symbol}**`,
+      name: 'PEAK HWM',
+      value: `\`${payload.highWaterMarkEth.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'Current / Exit Valuation',
-      value: `**${currentPrice.toFixed(4)} ${symbol}** (${roiSign}${unrealizedRoiPct.toFixed(2)}%)`,
+      name: 'MARK VALUATION',
+      value: `\`${currentPrice.toFixed(4)} ${symbol}\`  (${roiSign}${unrealizedRoiPct.toFixed(2)}%)`,
       inline: true,
     },
     {
-      name: 'Contract',
-      value: `\`${payload.contractAddress}\`${payload.tokenId ? ` (Token: \`${payload.tokenId}\`)` : ''}`,
+      name: 'CONTRACT',
+      value: `\`${payload.contractAddress}\`${payload.tokenId ? `  ·  Token \`${payload.tokenId}\`` : ''}`,
       inline: false,
     },
   ];
 
   if (payload.note) {
-    fields.push({ name: 'Note', value: payload.note, inline: false });
+    fields.push({ name: 'REMARK', value: payload.note, inline: false });
   }
 
   const embed: Record<string, unknown> = {
-    title: `📊 [${payload.event}] ${payload.assetName}`,
+    author: { name: `RŮŽE HOUSE  ·  ${labelMap[payload.event]}` },
+    title: payload.assetName,
     url: payload.txHash ? getExplorerTxUrl(payload.chain, payload.txHash) : undefined,
     color: colorMap[payload.event],
     fields,
-    footer: { text: 'Pierre — Active Positions & HWM Tracker (#positions)' },
+    footer: { text: 'Pierre Execution Desk  ·  Positions' },
     timestamp: new Date().toISOString(),
   };
 
-  return sendDiscordChannelEmbed('positions', embed, 'Pierre — Positions Tracker');
+  return sendDiscordChannelEmbed('positions', embed, 'Pierre  |  Positions');
 }
 
 /**
@@ -223,57 +231,53 @@ export async function broadcastPnlReport(payload: DiscordBroadcastPayload): Prom
 
   const fields: Array<{ name: string; value: string; inline?: boolean }> = [
     {
-      name: 'Result',
-      value: isProfit ? '🟢 **PROFIT**' : '🔴 **LOSS**',
+      name: 'OUTCOME',
+      value: isProfit ? '`PROFIT`' : '`LOSS`',
       inline: true,
     },
     {
-      name: 'Realized PnL',
+      name: 'REALIZED PNL',
       value: `**${sign}${realizedPnl.toFixed(4)} ${symbol}**`,
       inline: true,
     },
     {
-      name: 'Realized ROI',
+      name: 'REALIZED ROI',
       value: `**${sign}${roiPct.toFixed(2)}%**`,
       inline: true,
     },
     {
-      name: 'Entry Price',
-      value: `${entry.toFixed(4)} ${symbol}`,
+      name: 'ENTRY',
+      value: `\`${entry.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'Exit / Sold Price',
-      value: `${payload.priceEth.toFixed(4)} ${symbol}`,
+      name: 'SETTLEMENT',
+      value: `\`${payload.priceEth.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'Peak HWM Reached',
-      value: `${(payload.highWaterMarkEth ?? Math.max(entry, payload.priceEth)).toFixed(4)} ${symbol}`,
+      name: 'PEAK HWM',
+      value: `\`${(payload.highWaterMarkEth ?? Math.max(entry, payload.priceEth)).toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'Chain & Trigger',
-      value: `\`${payload.chain.toUpperCase()}\` • \`${payload.triggerSource}\``,
-      inline: true,
-    },
-    {
-      name: 'Explorer',
-      value: `[View Settlement Tx](${explorerUrl})`,
-      inline: true,
+      name: 'EXECUTION',
+      value: `\`${payload.chain.toUpperCase()}\`  ·  \`${payload.triggerSource}\`  ·  [Explorer](${explorerUrl})`,
+      inline: false,
     },
   ];
 
   const embed: Record<string, unknown> = {
-    title: `💰 [REALIZED PnL] ${payload.assetName}`,
+    author: { name: 'RŮŽE HOUSE  ·  REALIZED SETTLEMENT' },
+    title: payload.assetName,
     url: explorerUrl,
-    color: isProfit ? 0x10b981 : 0xef4444,
+    color: isProfit ? 0x10b981 : 0xdc3545,
     fields,
-    footer: { text: 'Pierre — Realized PnL Ledger (#pnl)' },
+    footer: { text: 'Pierre Execution Desk  ·  PnL Ledger' },
     timestamp: new Date().toISOString(),
   };
 
-  return sendDiscordChannelEmbed('pnl', embed, 'Pierre — PnL Ledger');
+  return sendDiscordChannelEmbed('pnl', embed, 'Pierre  |  PnL');
 }
 
 /**
@@ -287,33 +291,37 @@ export async function broadcastToDiscord(payload: DiscordBroadcastPayload): Prom
   const explorerUrl = getExplorerTxUrl(payload.chain, payload.txHash);
   const symbol = getNativeCurrencySymbol(payload.chain);
   const actionUpper = payload.action.toUpperCase();
-  const color = ACTION_COLORS[actionUpper] ?? 0x6366f1;
+  const color = ACTION_COLORS[actionUpper] ?? 0x1e1e23;
 
   // 1. Send Order Execution log to #order-execution
   const execFields: Array<{ name: string; value: string; inline?: boolean }> = [
-    { name: 'Action', value: `\`${actionUpper}\``, inline: true },
-    { name: 'Chain', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
-    { name: 'Execution Value', value: `**${payload.priceEth.toFixed(4)} ${symbol}**`, inline: true },
+    { name: 'ACTION', value: `\`${actionUpper}\``, inline: true },
+    { name: 'NETWORK', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
+    { name: 'VALUE', value: `\`${payload.priceEth.toFixed(4)} ${symbol}\``, inline: true },
     {
-      name: 'Contract',
-      value: `\`${payload.contractAddress}\`${payload.tokenId ? ` (Token: \`${payload.tokenId}\`)` : ''}`,
+      name: 'CONTRACT',
+      value: `\`${payload.contractAddress}\`${payload.tokenId ? `  ·  Token \`${payload.tokenId}\`` : ''}`,
       inline: false,
     },
-    { name: 'Trigger Source', value: `\`${payload.triggerSource}\``, inline: true },
-    { name: 'Explorer', value: `[View Transaction](${explorerUrl})`, inline: true },
+    {
+      name: 'SETTLEMENT',
+      value: `\`${payload.triggerSource}\`  ·  [View on Explorer](${explorerUrl})`,
+      inline: false,
+    },
   ];
 
   const execEmbed: Record<string, unknown> = {
-    title: `⚡ [ORDER ${actionUpper}] ${payload.assetName}`,
+    author: { name: `RŮŽE HOUSE  ·  ORDER ${actionUpper}` },
+    title: payload.assetName,
     url: explorerUrl,
     color,
     fields: execFields,
-    footer: { text: 'Pierre — Order Execution Feed (#order-execution)' },
+    footer: { text: 'Pierre Execution Desk  ·  Order Execution' },
     timestamp: new Date().toISOString(),
   };
 
   const results: boolean[] = [];
-  results.push(await sendDiscordChannelEmbed('order-execution', execEmbed, 'Pierre — Order Execution'));
+  results.push(await sendDiscordChannelEmbed('order-execution', execEmbed, 'Pierre  |  Execution'));
 
   // 2. Route to #positions on BUY / MINT
   if (actionUpper === 'BUY' || actionUpper === 'MINT') {

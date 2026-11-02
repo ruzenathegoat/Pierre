@@ -67,16 +67,18 @@ export async function runBawKeepAlive(notifyDiscordOnSuccess = false): Promise<B
       await sendDiscordChannelEmbed(
         'positions',
         {
-          title: '⚠️ [WARNING] Sesi Binance Agentic Wallet (.ai) Terputus / Unbind!',
-          color: 0xef4444,
+          author: { name: 'RŮŽE HOUSE  ·  SESSION MONITOR' },
+          title: 'Binance Agentic Wallet Session Unbound',
+          color: 0xdc3545,
           description:
-            'Heartbeat mendeteksi sesi `baw` telah logout/unbind. Segera SSH ke VPS dan jalankan `baw auth signin` untuk scan ulang QR dari aplikasi Binance.',
+            'Heartbeat detected that the `baw` MPC session is disconnected or expired. Run `baw auth signin` on the VPS and scan the QR code from the Binance mobile app.',
           fields: [
-            { name: 'Output Status', value: `\`\`\`${statusRes.stdout || statusRes.stderr}\`\`\`` },
+            { name: 'DIAGNOSTIC OUTPUT', value: `\`\`\`${statusRes.stdout || statusRes.stderr}\`\`\`` },
           ],
+          footer: { text: 'Pierre Execution Desk  ·  BAW Monitor' },
           timestamp,
         },
-        'Pierre — BAW Session Monitor'
+        'Pierre  |  Session Monitor'
       );
 
       return {
@@ -93,19 +95,21 @@ export async function runBawKeepAlive(notifyDiscordOnSuccess = false): Promise<B
       await sendDiscordChannelEmbed(
         'positions',
         {
-          title: '🟢 [KEEP-ALIVE] Sesi Binance Agentic Wallet (.ai) Aktif',
-          color: 0x10b981,
+          author: { name: 'RŮŽE HOUSE  ·  SESSION MONITOR' },
+          title: 'Binance Agentic Wallet Session Verified',
+          color: 0x1e1e23,
           description:
-            'Heartbeat 6-jam berhasil memperbarui aktivitas sesi `baw` (mencegah auto-unbind 48 jam).',
+            '6-hour heartbeat refreshed MPC session activity (48h auto-unbind prevention active).',
           fields: [
             {
-              name: 'Wallet Status',
+              name: 'STATUS',
               value: `\`\`\`${(statusRes.stdout || 'ACTIVE').slice(0, 500)}\`\`\``,
             },
           ],
+          footer: { text: 'Pierre Execution Desk  ·  BAW Monitor' },
           timestamp,
         },
-        'Pierre — BAW Session Monitor'
+        'Pierre  |  Session Monitor'
       );
     }
 

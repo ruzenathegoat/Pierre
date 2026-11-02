@@ -168,7 +168,7 @@ def main() -> int:
         elif status == 0:
             if st.get("alerted_date") != date.today().isoformat():
                 state_write(alerted_date=date.today().isoformat())
-                print(f"⚠️ OpenSea watchdog: cek koneksi gagal ({str(body)[:120]}). Tidak ada perubahan.")
+                print(f"**SYSTEM WATCHDOG  ·  OPENSEA FEED**\nStatus: `Connection Check Failed` ({str(body)[:120]})  ·  Action: `No Change`")
             return 0
 
     expires_ok = bool(expires) and (expires - now) >= ROTATE_BEFORE
@@ -182,16 +182,16 @@ def main() -> int:
     if nstatus == 200 and isinstance(nbody, dict):
         new_key = nbody.get("api_key") or nbody.get("key") or ""
         if not new_key:
-            print("⚠️ OpenSea: endpoint key balas 200 tanpa api_key. Cek manual di opensea.io/settings/developer.")
+            print("**SYSTEM WATCHDOG  ·  OPENSEA FEED**\nStatus: `HTTP 200 Without API Key`  ·  Action: `Check opensea.io/settings/developer`")
             return 0
         write_env_key(new_key)
         new_exp = nbody.get("expires_at")
         state_write(fingerprint=fingerprint(new_key), expires_at=new_exp, alerted_date=None,
                     rotated_at=now.isoformat())
         if critical:
-            print(f"🔑 OpenSea API key dirotasi otomatis ({why}). Key baru aktif, expire {new_exp or 'tidak dilaporkan'}. Tanpa restart, harness baca .env tiap request.")
+            print(f"**SYSTEM WATCHDOG  ·  OPENSEA KEY ROTATED**\nReason: `{why}`  ·  New Expiry: `{new_exp or '7d'}`  ·  Reload: `Hot-Reload Active (.env)`")
         else:
-            print(f"🔑 OpenSea API key dirotasi ({why}). Key baru aktif, expire {new_exp or 'tidak dilaporkan'}. Rotasi berikutnya ~48 jam sebelum expire.")
+            print(f"**SYSTEM WATCHDOG  ·  OPENSEA KEY ROTATED**\nReason: `{why}`  ·  New Expiry: `{new_exp or '7d'}`  ·  Next Rotation: `~48h Before Expiry`")
         return 0
 
     if not critical:
@@ -203,7 +203,7 @@ def main() -> int:
             return 0
         state_write(alerted_date=today)
         print(
-            f"⚠️ OpenSea API key bermasalah ({why}) dan rotasi otomatis kena limit "
+            f"**SYSTEM WATCHDOG  ·  OPENSEA KEY LIMIT**\nReason: `{why}` — Automatic rotation hit "
             "`Maximum 2 keys per day` dari IP VPS. Aksi: buat key baru di "
             "opensea.io/settings/developer lalu ganti OPENSEA_API_KEY di "
             "~/.hermes/web3-harness/.env."
@@ -212,7 +212,7 @@ def main() -> int:
 
     if st.get("alerted_date") != today:
         state_write(alerted_date=today)
-        print(f"⚠️ OpenSea watchdog: key bermasalah ({why}) dan rotasi gagal (HTTP {nstatus}). {str(nbody)[:180]}")
+        print(f"**SYSTEM WATCHDOG  ·  OPENSEA ROTATION ERROR**\nReason: `{why}`  ·  HTTP `{nstatus}`  ·  `{str(nbody)[:180]}`")
     return 0
 
 

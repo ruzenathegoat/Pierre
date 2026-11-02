@@ -276,23 +276,23 @@ def main():
         if eta is not None and eta > 1440:
             eta = None       # too slow to be a deadline; the rate line already tells the story
 
-        common = (f"free {free:,}/{max_free:,} ({100 * free / max_free:.0f}% claimed, "
-                  f"sisa {left:,})" if max_free else "free pool tidak ada")
+        common = (f"Free Pool: `{free:,} / {max_free:,}` ({100 * free / max_free:.0f}% claimed  ·  `{left:,}` left)"
+                  if max_free else "Free Pool: `None`")
         if eta is not None:
-            common += f" | laju {rate:,.0f}/jam, habis ~{eta:.0f} menit lagi"
+            common += f"  ·  Velocity: `{rate:,.0f}/h` (ETA `~{eta:.0f}m`)"
         elif rate:
-            common += f" | laju {rate:,.0f}/jam"
+            common += f"  ·  Velocity: `{rate:,.0f}/h`"
 
         # ---- filter A: fresh mint, free room still available (the actionable one)
         keyA = f"{ca}:fresh"
         if left and age <= FRESH_S and left_pct >= LOW_LEFT and now - alerts.get(keyA, 0) > FRESH_REDEDUPE_S:
             alerts[keyA] = now
             messages.append(
-                f"**Mint baru buka, free masih ada** {t['sym']} `{ca}`\n"
+                f"**MINT RADAR  ·  NEW FREE POOL  ·  {t['sym']}**\n"
+                f"Contract: `{ca}`  ·  [BscScan](<https://bscscan.com/address/{ca}>)\n"
                 f"{common}\n"
-                f"paid {paid_txt} | harga {price_txt} | umur {age / 60:.0f} menit\n"
-                + "\n".join(eligibility(ca, WALLETS))
-                + f"\nhttps://bscscan.com/address/{ca}"
+                f"Paid Pool: `{paid_txt}`  ·  Price: `{price_txt}`  ·  Age: `{age / 60:.0f}m`\n"
+                + "\n".join(f"Eligibility: {line}" for line in eligibility(ca, WALLETS))
             )
             continue
 
@@ -302,14 +302,13 @@ def main():
                 and (left == 0 or left_pct < LOW_LEFT)
                 and now - alerts.get(keyB, 0) > FREE_WINDOW_S):
             alerts[keyB] = now
-            head = (f"**Free pool habis** {t['sym']}" if left == 0
-                    else f"**Free pool tinggal {left_pct:.0f}%** {t['sym']}")
+            head = (f"**MINT RADAR  ·  FREE POOL DEPLETED  ·  {t['sym']}**" if left == 0
+                    else f"**MINT RADAR  ·  FREE POOL LOW ({left_pct:.0f}% LEFT)  ·  {t['sym']}**")
             messages.append(
-                f"{head} `{ca}`\n"
-                f"{common}\n"
-                f"umur {age / 3600:.1f} jam\n"
-                + "\n".join(eligibility(ca, WALLETS))
-                + f"\nhttps://bscscan.com/address/{ca}"
+                f"{head}\n"
+                f"Contract: `{ca}`  ·  [BscScan](<https://bscscan.com/address/{ca}>)\n"
+                f"{common}  ·  Age: `{age / 3600:.1f}h`\n"
+                + "\n".join(f"Eligibility: {line}" for line in eligibility(ca, WALLETS))
             )
 
         # ---- filter C: paid velocity (sellout closes the free lane)
@@ -325,10 +324,10 @@ def main():
         if delta >= PAID_DELTA and now - alerts.get(keyC, 0) > PAID_REDEDUPE_S:
             alerts[keyC] = now
             messages.append(
-                f"**Paid jalan cepat, free ikut ditutup saat sellout** {t['sym']} `{ca}`\n"
-                f"paid +{delta:,} dalam {PAID_WINDOW_S // 60} menit "
-                f"(total {paid_txt})\n"
-                + f"{common}\nhttps://bscscan.com/address/{ca}"
+                f"**MINT RADAR  ·  HIGH PAID VELOCITY  ·  {t['sym']}**\n"
+                f"Contract: `{ca}`  ·  [BscScan](<https://bscscan.com/address/{ca}>)\n"
+                f"Paid Delta: `+{delta:,}` in `{PAID_WINDOW_S // 60}m` (Total `{paid_txt}`)\n"
+                f"{common}"
             )
 
     if len(alerts) > 4000:

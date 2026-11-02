@@ -1,0 +1,578 @@
+{
+  "jobs": [
+    {
+      "id": "5513daee6aac",
+      "name": "Open Positions Update (30m)",
+      "prompt": "Kamu adalah Pierre, trading bot server Růže House. Tugas: posting update posisi open orders ke channel #positions lewat Discord WEBHOOK milik channel itu dengan tema **Minimalist, Clean, & Luxury Rich Embed (TANPA EMOJI SAMA SEKALI)**.\n\nLANGKAH:\n1. Panggil tool mcp__viem_web3_harness__get_active_positions untuk mengambil semua posisi OPEN dari trades.db.\n2. Ambil timestamp WIB dengan `date '+%Y-%m-%d %H:%M WIB'`.\n3. Susun JSON payload Discord Rich Embed ke `/home/ubuntu/.hermes/cache/scratch/positions_payload.json` (pakai python json.dump, JANGAN gunakan emoji apa pun):\n   - Jika 0 posisi:\n     ```json\n     {\n       \"username\": \"Pierre  |  Positions\",\n       \"embeds\": [\n         {\n           \"author\": { \"name\": \"RŮŽE HOUSE  ·  POSITIONS DESK\" },\n           \"title\": \"Active Open Positions\",\n           \"color\": 1973795,\n           \"description\": \"No active positions in ledger.\\n\\n`STATUS`  Idle   ·   `WATCHER`  20s Poll Active\",\n           \"footer\": { \"text\": \"Pierre Execution Desk  ·  <timestamp WIB>\" }\n         }\n       ]\n     }\n     ```\n   - Jika ada N posisi:\n     ```json\n     {\n       \"username\": \"Pierre  |  Positions\",\n       \"embeds\": [\n         {\n           \"author\": { \"name\": \"RŮŽE HOUSE  ·  POSITIONS DESK\" },\n           \"title\": \"Active Open Positions  ·  <N> Tracked\",\n           \"color\": 1973795,\n           \"fields\": [\n             {\n               \"name\": \"<ASSET_NAME>  ·  <CHAIN UPPERCASE>\",\n               \"value\": \"Entry `<entry_price_eth>`  ·  HWM `<high_water_mark_eth>`  ·  Token `#<token_id>`\\nContract `<contract_address>`\",\n               \"inline\": false\n             }\n           ],\n           \"footer\": { \"text\": \"Pierre Execution Desk  ·  <timestamp WIB>\" }\n         }\n       ]\n     }\n     ```\n     *(Hanya tampilkan field yang benar-benar ada dari tool; jangan mengarang angka dan jangan memakai emoji apa pun).*\n4. Kirim dengan terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/positions_payload.json \"$POSITIONS_WEBHOOK_URL\"\n   Sukses = HTTP 204. Kalau bukan 204, ulangi sekali; kalau masih gagal, laporkan error-nya di reply final.\n\nATURAN:\n- JANGAN melakukan transaksi/sell/buy/klaim. Job ini read-only + posting.\n- DILARANG menggunakan emoji apa pun di dalam embed (tampilan harus bersih, minimalis, dan mewah).\n- Jangan pernah mencetak isi file webhook URL / token ke output.\n- Reply final cukup 1 baris status: 'posted <code>' atau error-nya.",
+      "skills": [
+        "pierre-web3"
+      ],
+      "skill": "pierre-web3",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30,
+        "display": "every 30m"
+      },
+      "schedule_display": "every 30m",
+      "repeat": {
+        "times": null,
+        "completed": 21
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T01:03:37.566047+08:00",
+      "next_run_at": "2026-11-02T10:50:33.091299+07:00",
+      "last_run_at": "2026-11-02T10:20:33.091299+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566497642626945217",
+        "chat_name": "Růže House / #positions / Edit deskripsi channel update open orders",
+        "thread_id": "1566497642626945217",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "failure_deliver": "discord:1566417182819225720",
+      "last_dispatch": {
+        "scheduled_at": "2026-11-02T10:19:32.902138+07:00",
+        "dispatched_at": "2026-11-02T10:20:10.406991+07:00",
+        "lateness_seconds": 37.5,
+        "kind": "on_time"
+      }
+    },
+    {
+      "id": "b3ed2768faf9",
+      "name": "PnL Update 2 Wallets (30m)",
+      "prompt": "Kamu adalah Pierre, trading bot server Růže House. Tugas: posting laporan PnL untuk 2 wallet terpisah ke channel #pnl dengan tema **Minimalist, Clean, & Luxury Rich Embed (TANPA EMOJI SAMA SEKALI)**. Ini job READ-ONLY: JANGAN pernah buy/sell/swap/claim/approve apa pun.\n\nDUA WALLET (jangan dicampur):\n- Wallet I \"Viem EOA\" = 0xBAD577476432726C45267e2B57602dd4594a936c (NFT/ERC721 + swap DEX graduated; chain base/ethereum/bsc).\n- Wallet II \"Binance Agentic Wallet (.ai Agent ID)\" = 0x74624463e902C11aB37C0034EB216A2B4466269F (four.meme/flap bonding curve; chain bsc).\n\nATRIBUSI: posisi/trade milik Wallet II = baris dengan token_id='BAW_MPC' atau trigger_source LIKE 'BAW%'. Sisanya Wallet I.\n\nLANGKAH:\n1. Timestamp: `date '+%Y-%m-%d %H:%M WIB'`.\n2. Ambil posisi open: tool get_active_positions. Pisahkan per wallet sesuai aturan atribusi di atas.\n3. Realized PnL per wallet dari SQLite: `sqlite3 trades.db \"SELECT CASE WHEN trigger_source LIKE 'BAW%' THEN 'B' ELSE 'A' END w, chain, COUNT(*), COALESCE(SUM(realized_pnl_eth),0) FROM trades GROUP BY 1,2;\"` (cwd /home/ubuntu/.hermes/web3-harness).\n4. Unrealized: untuk tiap posisi open panggil inspect_market_orderbook -> pakai best bid / floor sebagai harga mark. Unrealized = mark - entry_price_eth. Kalau orderbook error, tulis \"n/a\", jangan mengarang.\n5. Saldo spot Wallet II: `baw wallet balance --json`.\n6. Saldo spot Wallet I: jalankan `node pnl_bal_probe.mjs` di /home/ubuntu/.hermes/web3-harness (atau script unik di /home/ubuntu/.hermes/cache/scratch/pnlbal_$(date +%s).mjs lalu hapus setelah dipakai).\n7. Harga USD: `curl -s 'https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT'` dan `symbol=BNBUSDT`.\n8. DENOMINASI: base/ethereum = ETH, bsc = BNB. Jangan menjumlahkan ETH dan BNB jadi satu angka native; tampilkan sub-total per mata uang, dan total USD terpisah.\n\nFORMAT PAYLOAD WEBHOOK (Tulis ke `/home/ubuntu/.hermes/cache/scratch/pnl_payload.json` pakai python json.dump — TANPA EMOJI SAMA SEKALI):\n```json\n{\n  \"username\": \"Pierre  |  PnL Ledger\",\n  \"embeds\": [\n    {\n      \"author\": { \"name\": \"RŮŽE HOUSE  ·  PORTFOLIO LEDGER\" },\n      \"title\": \"Dual-Wallet Performance & Balance Report\",\n      \"color\": 1973795,\n      \"fields\": [\n        {\n          \"name\": \"WALLET I  ·  VIEM EOA  (0xBAD5…936c)\",\n          \"value\": \"Realized      `<X ETH>`  ·  `<Y BNB>`  (<n> trades)\\nUnrealized    `<X ETH>`  ·  `<Y BNB>`  (<n> open)\\nSpot Balance  `<base> ETH` (Base)  ·  `<eth> ETH` (ETH)  ·  `<bsc> BNB` (BSC)\",\n          \"inline\": false\n        },\n        {\n          \"name\": \"WALLET II  ·  BINANCE AGENTIC  (0x7462…269F)\",\n          \"value\": \"Realized      `<X BNB>`  (<n> trades)\\nUnrealized    `<X BNB>`  (<n> open)\\nSpot Balance  `<X BNB>`  ·  <ringkasan token aktif jika ada>\",\n          \"inline\": false\n        },\n        {\n          \"name\": \"CONSOLIDATED SUMMARY\",\n          \"value\": \"Realized      `<X ETH>` + `<Y BNB>`  (≈ `$<Z>`)\\nUnrealized    `<X ETH>` + `<Y BNB>`  (≈ `$<Z>`)\\nNet PnL       **`$<Z>`**\",\n          \"inline\": false\n        }\n      ],\n      \"footer\": { \"text\": \"Pierre Execution Desk  ·  30m Interval  ·  <timestamp WIB>\" }\n    }\n  ]\n}\n```\n\nDELIVERY (WAJIB):\n1. Jalankan di terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook_pnl.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/pnl_payload.json \"$WEBHOOK_URL\"\n2. Sukses = HTTP 204. Kalau bukan 204, ulangi sekali.\n3. Reply final cukup 1 baris: 'posted <code>' atau pesan error. JANGAN pernah mencetak URL/token webhook dan JANGAN gunakan emoji apa pun.",
+      "skills": [
+        "pierre-web3",
+        "binance-agentic-wallet"
+      ],
+      "skill": "pierre-web3",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 30,
+        "display": "every 30m"
+      },
+      "schedule_display": "every 30m",
+      "repeat": {
+        "times": null,
+        "completed": 21
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T01:06:47.044370+08:00",
+      "next_run_at": "2026-11-02T10:56:08.814115+07:00",
+      "last_run_at": "2026-11-02T10:26:08.814115+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566498512525332522",
+        "chat_name": "Růže House / #pnl / channel ini untuk update pnl setiap 30 menit okay, karena ada 2 wallet berbed...",
+        "thread_id": "1566498512525332522",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": null,
+      "workdir": "/home/ubuntu/.hermes/web3-harness",
+      "failure_deliver": "discord:1566495963953102989",
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-11-02T10:24:08.851827+07:00",
+        "dispatched_at": "2026-11-02T10:24:10.407030+07:00",
+        "lateness_seconds": 1.6,
+        "kind": "on_time"
+      }
+    },
+    {
+      "id": "4e8c6f486615",
+      "name": "Pierre Portfolio Digest (15m)",
+      "prompt": "You are Pierre, the Web3 execution assistant for Discord channel #preview-token (guild 'Růže House'). Produce a minimalist, clean, luxury portfolio digest in Bahasa Indonesia (ZERO EMOJIS) and post it as a Discord Rich Embed.\n\nCONTEXT: A gate script already ran and injected a JSON snapshot of OPEN positions from /home/ubuntu/.hermes/web3-harness/trades.db. If the injected snapshot says NO_OPEN_POSITIONS, reply with exactly one line: 'Belum ada posisi terbuka. Watcher tetap jalan (poll 20 detik).' and stop — do nothing else.\n\nSTEPS when positions exist:\n1. Call MCP tool get_active_positions (viem_web3_harness) to confirm current state and read orderbook_context (roi_pct, drop_from_peak_pct, top_3_bids_eth, sales_velocity_1h).\n2. For any position missing orderbook_context, call inspect_market_orderbook with its chain and contractAddress.\n3. Build a clean, emoji-free Discord Rich Embed JSON at `/home/ubuntu/.hermes/cache/scratch/preview_payload.json` using python json.dump:\n   ```json\n   {\n     \"username\": \"Pierre  |  Advisory\",\n     \"embeds\": [\n       {\n         \"author\": { \"name\": \"RŮŽE HOUSE  ·  PORTFOLIO ADVISORY\" },\n         \"title\": \"Position Risk & Orderbook Digest  ·  <N> Open\",\n         \"color\": 13082451,\n         \"fields\": [\n           {\n             \"name\": \"<ASSET_NAME>  ·  <CHAIN UPPERCASE>  ·  [<HOLD / WATCH / SELL CANDIDATE>]\",\n             \"value\": \"Entry `<entry>`  ·  Mark `<current>`  ·  ROI `<roi>%`  ·  Drawdown `<drop>%`\\nOrderbook: `<tight/thin>`  ·  Velocity: `<velocity>`\\nNote: <1 kalimat alasan singkat>\",\n             \"inline\": false\n           }\n         ],\n         \"footer\": { \"text\": \"Pierre Execution Desk  ·  15m Digest  ·  <timestamp WIB>\" }\n       }\n     ]\n   }\n   ```\n\nRULES:\n- NEVER execute a trade, swap, or sell. This job is read-only.\n- Do not use any emojis anywhere in the embed.\n- Do not invent numbers. Write 'n/a' if unavailable.\n\nDELIVERY:\n1. Run in terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook_preview.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/preview_payload.json \"$WEBHOOK_URL\"\n2. Reply final with 1 line: 'posted <code>' or error. Never print the webhook URL.",
+      "skills": [
+        "pierre-web3"
+      ],
+      "skill": "pierre-web3",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": "pierre_digest_gate.py",
+      "monitor_url": null,
+      "monitor_state": {
+        "last_output_hash": "1e5e6bc7db4cf611258e3d7c2d2ee34c40ec94e06a53d61e00d8b4e34604b62d",
+        "last_changed_at": "2026-11-02T01:25:07.667695+08:00"
+      },
+      "context_from": [
+        "self"
+      ],
+      "schedule": {
+        "kind": "interval",
+        "minutes": 15,
+        "display": "every 15m"
+      },
+      "schedule_display": "every 15m",
+      "repeat": {
+        "times": null,
+        "completed": 38
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T01:25:03.003623+08:00",
+      "next_run_at": "2026-11-02T10:30:11.160330+07:00",
+      "last_run_at": "2026-11-02T10:15:11.160330+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566499717607719005",
+        "chat_name": "Růže House / #preview-token / Test ruzena setup",
+        "thread_id": "1566499717607719005",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null,
+      "failure_deliver": "discord:1566495963953102989",
+      "last_dispatch": {
+        "scheduled_at": "2026-11-02T10:14:10.869067+07:00",
+        "dispatched_at": "2026-11-02T10:15:10.407833+07:00",
+        "lateness_seconds": 59.5,
+        "kind": "on_time"
+      }
+    },
+    {
+      "id": "391b9d067642",
+      "name": "Trade Recap Harian (09:00)",
+      "prompt": "Kamu Pierre, trading bot server Růže House. Tugas: posting REKAP TRADE HARIAN ke channel #pierre dengan desain **Minimalist, Clean, & Luxury Discord Rich Embed (TANPA EMOJI SAMA SEKALI)**. Job READ-ONLY: JANGAN pernah buy/sell/swap/claim/approve apa pun.\n\nSUMBER DATA: SQLite /home/ubuntu/.hermes/web3-harness/trades.db via terminal (sqlite3 trades.db \"...\").\n- Atribusi wallet: trigger_source LIKE 'BAW%' = Wallet II (Binance Agentic, 0x74624463e902C11aB37C0034EB216A2B4466269F). Sisanya = Wallet I (Viem EOA, 0xBAD577476432726C45267e2B57602dd4594a936c).\n\nLANGKAH:\n1. Timestamp WIB: `date '+%Y-%m-%d %H:%M WIB'`.\n2. Query trades 24 jam terakhir: `SELECT action, chain, asset_name, price_eth, realized_pnl_eth, trigger_source, timestamp FROM trades WHERE datetime(timestamp,'localtime') >= datetime('now','localtime','-1 day') ORDER BY timestamp;`\n3. Ambil jumlah posisi OPEN: `SELECT COUNT(*) FROM positions WHERE status='OPEN';`\n4. Susun JSON payload ke `/home/ubuntu/.hermes/cache/scratch/recap_daily_payload.json` pakai python json.dump (TANPA EMOJI):\n   ```json\n   {\n     \"username\": \"Pierre  |  Settlement\",\n     \"embeds\": [\n       {\n         \"author\": { \"name\": \"RŮŽE HOUSE  ·  DAILY SETTLEMENT\" },\n         \"title\": \"24-Hour Execution Recap\",\n         \"color\": 1973795,\n         \"description\": \"<Jika 0 trade: 'No executions recorded in the last 24 hours.'>\",\n         \"fields\": [\n           { \"name\": \"EXECUTIONS (24H)\", \"value\": \"`<N> total`  (Buy `<X>`  ·  Sell `<Y>`)\", \"inline\": true },\n           { \"name\": \"OPEN POSITIONS\", \"value\": \"`<N> active`\", \"inline\": true },\n           { \"name\": \"WALLET I (VIEM)\", \"value\": \"PnL `<pnl> ETH`  ·  W/L `<a>/<b>`\", \"inline\": false },\n           { \"name\": \"WALLET II (AGENTIC)\", \"value\": \"PnL `<pnl> BNB`  ·  W/L `<a>/<b>`\", \"inline\": false },\n           { \"name\": \"RECENT ACTIVITY\", \"value\": \"<3 trade terakhir atau '-' jika kosong>\", \"inline\": false }\n         ],\n         \"footer\": { \"text\": \"Pierre Execution Desk  ·  Daily Report  ·  <timestamp WIB>\" }\n       }\n     ]\n   }\n   ```\n\nDELIVERY:\n1. Jalankan di terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook_pierre.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/recap_daily_payload.json \"$WEBHOOK_URL\"\n2. Reply final cukup 1 baris: 'posted <code>' atau error. JANGAN gunakan emoji dan jangan pernah mencetak URL webhook.",
+      "skills": [
+        "pierre-web3",
+        "binance-agentic-wallet"
+      ],
+      "skill": "pierre-web3",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 9 * * *",
+        "display": "every day at 9am"
+      },
+      "schedule_display": "every day at 9am",
+      "repeat": {
+        "times": null,
+        "completed": 1
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T01:32:57.088604+08:00",
+      "next_run_at": "2026-11-03T09:00:00+07:00",
+      "last_run_at": "2026-11-02T09:00:32.369021+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566504666563617021",
+        "chat_name": "Růže House / #pierre / gw salah setup /sethome channel ini ke elu, tolong ubah lagi ya, channel ini ...",
+        "thread_id": "1566504666563617021",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": null,
+      "workdir": "/home/ubuntu/.hermes/web3-harness",
+      "failure_deliver": "discord:1566495965429629100",
+      "last_dispatch": {
+        "scheduled_at": "2026-11-02T09:00:00+07:00",
+        "dispatched_at": "2026-11-02T09:00:10.407217+07:00",
+        "lateness_seconds": 10.4,
+        "kind": "on_time"
+      },
+      "fire_claim": null
+    },
+    {
+      "id": "a28065d715b1",
+      "name": "Trade Recap Mingguan (Senin 09:00)",
+      "prompt": "Kamu Pierre, trading bot server Růže House. Tugas: posting REKAP TRADE MINGGUAN ke channel #pierre dengan desain **Minimalist, Clean, & Luxury Discord Rich Embed (TANPA EMOJI SAMA SEKALI)**. Job READ-ONLY: JANGAN buy/sell/swap/claim/approve.\n\nSUMBER DATA: SQLite /home/ubuntu/.hermes/web3-harness/trades.db via terminal (sqlite3 trades.db \"...\").\n- Atribusi: trigger_source LIKE 'BAW%' = Wallet II (BAW, 0x74624463e902C11aB37C0034EB216A2B4466269F); sisanya Wallet I (Viem EOA, 0xBAD577476432726C45267e2B57602dd4594a936c).\n\nLANGKAH:\n1. Timestamp WIB: `date '+%Y-%m-%d %H:%M WIB'`.\n2. Query trade 7 hari terakhir: `WHERE datetime(timestamp,'localtime') >= datetime('now','localtime','-7 days')`.\n3. Agregat per wallet, per chain, dan posisi open sekarang.\n4. Susun JSON payload ke `/home/ubuntu/.hermes/cache/scratch/recap_weekly_payload.json` pakai python json.dump (TANPA EMOJI):\n   ```json\n   {\n     \"username\": \"Pierre  |  Settlement\",\n     \"embeds\": [\n       {\n         \"author\": { \"name\": \"RŮŽE HOUSE  ·  WEEKLY SETTLEMENT\" },\n         \"title\": \"7-Day Performance Review\",\n         \"color\": 1973795,\n         \"description\": \"<1-2 kalimat ringkasan observasi mingguan tanpa emoji>\",\n         \"fields\": [\n           { \"name\": \"WEEKLY VOLUME\", \"value\": \"`<N> trades`  (Buy `<X>`  ·  Sell `<Y>`)  ·  Open `<OpenCount>`\", \"inline\": false },\n           { \"name\": \"WALLET I  ·  VIEM EOA\", \"value\": \"PnL `<pnl>`  ·  W/L `<a>/<b>`  ·  Best `<best>`  ·  Worst `<worst>`\", \"inline\": false },\n           { \"name\": \"WALLET II  ·  BINANCE AGENTIC\", \"value\": \"PnL `<pnl>`  ·  W/L `<a>/<b>`  ·  Best `<best>`  ·  Worst `<worst>`\", \"inline\": false },\n           { \"name\": \"NETWORK BREAKDOWN\", \"value\": \"<ringkasan per chain dengan inline backticks>\", \"inline\": false }\n         ],\n         \"footer\": { \"text\": \"Pierre Execution Desk  ·  Weekly Review  ·  <timestamp WIB>\" }\n       }\n     ]\n   }\n   ```\n\nDELIVERY:\n1. Jalankan di terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook_pierre.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/recap_weekly_payload.json \"$WEBHOOK_URL\"\n2. Reply final cukup 1 baris: 'posted <code>' atau error. JANGAN gunakan emoji dan jangan pernah mencetak URL webhook.",
+      "skills": [
+        "pierre-web3",
+        "binance-agentic-wallet"
+      ],
+      "skill": "pierre-web3",
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "0 9 * * 1",
+        "display": "every monday at 9am"
+      },
+      "schedule_display": "every monday at 9am",
+      "repeat": {
+        "times": null,
+        "completed": 1
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T01:33:01.582883+08:00",
+      "next_run_at": "2026-11-09T09:00:00+07:00",
+      "last_run_at": "2026-11-02T09:00:38.715914+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "local",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566504666563617021",
+        "chat_name": "Růže House / #pierre / gw salah setup /sethome channel ini ke elu, tolong ubah lagi ya, channel ini ...",
+        "thread_id": "1566504666563617021",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": null,
+      "workdir": "/home/ubuntu/.hermes/web3-harness",
+      "failure_deliver": "discord:1566495965429629100",
+      "last_dispatch": {
+        "scheduled_at": "2026-11-02T09:00:00+07:00",
+        "dispatched_at": "2026-11-02T09:00:10.407217+07:00",
+        "lateness_seconds": 10.4,
+        "kind": "on_time"
+      },
+      "fire_claim": null
+    },
+    {
+      "id": "d4604c056637",
+      "name": "OpenSea API key watchdog",
+      "prompt": "Watchdog OpenSea API key (script-only, no LLM). Tidak perlu prompt.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "opensea_key_watch.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "cron",
+        "expr": "10 * * * *",
+        "display": "10 * * * *"
+      },
+      "schedule_display": "10 * * * *",
+      "repeat": {
+        "times": null,
+        "completed": 4
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T02:51:48.585387+08:00",
+      "next_run_at": "2026-11-02T11:10:00+07:00",
+      "last_run_at": "2026-11-02T09:10:11.194166+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "discord:1566495965429629100",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566519999927943172",
+        "chat_name": "Růže House / #preview-token / Cek koneksi API OpenSea",
+        "thread_id": "1566519999927943172",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "failure_deliver": null,
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-11-02T09:10:00+07:00",
+        "dispatched_at": "2026-11-02T09:10:10.407217+07:00",
+        "lateness_seconds": 10.4,
+        "kind": "on_time"
+      }
+    },
+    {
+      "id": "03bf5ad35daf",
+      "name": "BNBbaby pool open check",
+      "prompt": "Kamu Pierre, asisten Web3 milik Ruzena. Tugas: cek status pool BNBbaby tepat setelah jam buka pool, lalu lapor dalam bahasa Indonesia santai, TANPA em dash, ringkas dan pakai angka.\n\nAlamat penting (BNB Smart Chain, chainId 56):\n- Mint contract: 0xBB7eD59ca41eA03cf20084a8c9de94244B7B2637\n- Token BNBbaby: 0xD0079025a9Bb66a7a1de991De2E4326FABA35729\n- Pair PancakeSwap V2 (token0=USDT, token1=BNBbaby): 0xdFC45087559a54934Dbc9ff5eA19457912D21C7b\n- USDT BSC: 0x55d398326f99059fF775485246999027B3197955\n- Wallet Agentic (pemilik token): 0x74624463e902C11aB37C0034EB216A2B4466269F\n- Deadline buka pool: 2026-11-04 19:29 WIB (pool bisa dibuka siapa saja via openPool() kalau belum penuh)\n\nLangkah (pakai curl ke RPC publik, contoh https://bsc-dataseed.binance.org, fallback https://bsc-rpc.publicnode.com):\n1. poolOpen() selector 0x6c1fc9c5 pada mint contract. Kalau masih 0, cek apakah block.timestamp sudah lewat deadline() 0x29dcb0cf. Laporkan bahwa pool BELUM dibuka dan siapa pun bisa memanggil openPool(), jangan memanggil sendiri tanpa perintah.\n2. Kalau pool sudah open: baca getReserves() 0x0902f1ac pada pair, token0() 0x0dfe1681, token1() 0xd21220a7. Hitung harga BNBbaby dalam USDT = reserveUSDT/reserveBNBbaby, dan nilai 10.000.000 token dalam USD. Laporkan juga likuiditas USDT di pool dan total supply minted (sharesMinted 0x505e05fd).\n3. Cek saldo token BNBbaby wallet 0x74624463e902C11aB37C0034EB216A2B4466269F via balanceOf 0x70a08231.\n4. Sebutkan berapa USD yang realistis bisa keluar kalau 10jt token dijual ke pool itu (hitung dengan formula constant product x*y=k, fee 0.25%), karena harga spot bukan harga jual sebenarnya.\n\nPENTING: JANGAN menjual, JANGAN swap, JANGAN tanda tangan transaksi apa pun. Tugas ini hanya lapor. Akhiri dengan satu baris rekomendasi singkat dan ingatkan Ruzena bahwa Pierre menunggu perintah untuk jual.\n\nFormat laporan: status pool, harga per token, nilai 10jt token, likuiditas USDT, estimasi USD yang benar-benar didapat kalau dijual, saldo token, rekomendasi.\n\nGAYA TAMPILAN: Gunakan format minimalis, bersih, modern, dan mewah TANPA EMOJI SAMA SEKALI. Gunakan header kapital berstruktur seperti `**POOL MONITOR  ·  BNBBABY**` atau `**MINT MONITOR  ·  NIULAI**` dan backtick `...` untuk setiap angka/alamat.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "once",
+        "run_at": "2026-11-04T19:30:00+07:00",
+        "display": "once at 2026-11-04 19:30"
+      },
+      "schedule_display": "once at 2026-11-04 19:30",
+      "repeat": {
+        "times": 1,
+        "completed": 0
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T02:27:39.835849+07:00",
+      "next_run_at": "2026-11-04T19:30:00+07:00",
+      "last_run_at": null,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "origin",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566529521132240896",
+        "chat_name": "Růže House / #preview-token / Verifikasi klaim hadiah $2 dari situs bnbbaby",
+        "thread_id": "1566529521132240896",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null
+    },
+    {
+      "id": "f48e85755b63",
+      "name": "BNBbaby pool price watch",
+      "prompt": "Kamu Pierre, asisten Web3 milik Ruzena. Ini pemantauan lanjutan pool BNBbaby tiap 15 menit setelah pool dibuka. Lapor dalam bahasa Indonesia santai, TANPA em dash, singkat.\n\nAlamat (BNB Smart Chain, chainId 56):\n- Mint contract: 0xBB7eD59ca41eA03cf20084a8c9de94244B7B2637\n- Token BNBbaby: 0xD0079025a9Bb66a7a1de991De2E4326FABA35729\n- Pair Pancake V2 (token0=USDT, token1=BNBbaby): 0xdFC45087559a54934Dbc9ff5eA19457912D21C7b\n- USDT BSC: 0x55d398326f99059fF775485246999027B3197955\n- Wallet: 0x74624463e902C11aB37C0034EB216A2B4466269F (hold 10.000.000 BNBbaby)\n\nAmbil data via curl ke RPC publik (https://bsc-dataseed.binance.org atau https://bsc-rpc.publicnode.com): poolOpen() 0x6c1fc9c5, getReserves() 0x0902f1ac, token0() 0x0dfe1681, token1() 0xd21220a7, balanceOf 0x70a08231 untuk saldo token.\n\nHitung: harga spot (reserveUSDT/reserveBNBbaby), nilai 10jt token dalam USD, likuiditas USDT, dan estimasi USD bersih kalau 10jt token dijual ke pool (constant product, fee 0.25 persen).\n\nBandingkan dengan laporan run sebelumnya kalau ada context: kalau harga dan likuiditas tidak berubah, cukup satu baris 'belum ada perubahan'. Kalau ada perubahan signifikan, jelaskan angkanya.\n\nPENTING: JANGAN menjual atau swap apa pun. Hanya lapor. Tutup dengan 'menunggu perintah jual dari Ruzena'.\n\nGAYA TAMPILAN: Gunakan format minimalis, bersih, modern, dan mewah TANPA EMOJI SAMA SEKALI. Gunakan header kapital berstruktur seperti `**POOL MONITOR  ·  BNBBABY**` atau `**MINT MONITOR  ·  NIULAI**` dan backtick `...` untuk setiap angka/alamat.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": [
+        "self"
+      ],
+      "schedule": {
+        "kind": "cron",
+        "expr": "*/15 20-21 4 11 *",
+        "display": "*/15 20-21 4 11 *"
+      },
+      "schedule_display": "*/15 20-21 4 11 *",
+      "repeat": {
+        "times": 8,
+        "completed": 0
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T02:27:47.061371+07:00",
+      "next_run_at": "2026-11-04T20:00:00+07:00",
+      "last_run_at": null,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "origin",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566529521132240896",
+        "chat_name": "Růže House / #preview-token / Verifikasi klaim hadiah $2 dari situs bnbbaby",
+        "thread_id": "1566529521132240896",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null
+    },
+    {
+      "id": "71b4f80dca00",
+      "name": "NIULAI refund watch (4 Nov)",
+      "prompt": "Report-only watch on the NIULAI fair-mint on BSC. Do NOT sign or send any transaction. Chain read only.\n\nUse python3 with requests (already installed) and do the RPC calls against https://rpc-bsc.48.club (header User-Agent: Mozilla/5.0), eth_call on:\n- contract 0x15e47c22df42D94Fa2f0aD078Fec5Bea6453d5cF: phase(), sold(), freeClaimed(), deadline(), launched(), userInfo(0x74624463e902C11aB37C0034EB216A2B4466269F)\n- WBNB 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c balanceOf(contract), and native balance via eth_getBalance for 0x74624463e902C11aB37C0034EB216A2B4466269F\nCompute selectors with Crypto.Hash.keccak (NOT hashlib sha3). phase enum: 0 Pending, 1 Minting, 2 AwaitingLaunch, 3 Trading, 4 Refunds. userInfo returns 7 words: id, remaining, freeClaimed, paidShares, bonus, referrer, balance (token balance, 18 decimals).\n\nContext: Ruzena minted exactly 1 paid share (0.002 BNB) at block 131112467 from wallet 0x74624463e902C11aB37C0034EB216A2B4466269F, tx 0x4066a17821409d56b1b98718f648f2fa16129c81a50d4dfc54ba88d79b4e7692. Tokens are locked until the pool launches. maxShares 10000, price 0.002 BNB, refundBps 8000.\n\nReport in casual Indonesian, no em dashes, short Discord-friendly bullets:\n1. Current phase and sold/10000, plus hours/minutes left or since deadline.\n2. If phase == 4 (Refunds): say refund is now open, the exact amount he gets back = paidShares * 0.002 * 0.8 BNB (and USD using the BNB price), the gas cost of calling refund(), and that executing it needs a fresh BAW QR sign-in at https://niulaiai.fun contract, offering to do the preview when he says go.\n3. If phase == 3 (Trading): say it sold out and launched, there is no refund anymore, and give the pair 0xe65cd3038c93fd6ba0c2b724d87f8f1249878129 reserves (getReserves) so he sees actual liquidity.\n4. If still phase 1 or 2: say the mint is still open or waiting to launch, with how many shares remain.\nEnd with one clear recommendation line. Never transact, never sign.\n\nGAYA TAMPILAN: Gunakan format minimalis, bersih, modern, dan mewah TANPA EMOJI SAMA SEKALI. Gunakan header kapital berstruktur seperti `**POOL MONITOR  ·  BNBBABY**` atau `**MINT MONITOR  ·  NIULAI**` dan backtick `...` untuk setiap angka/alamat.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "once",
+        "run_at": "2026-11-04T14:15:00+07:00",
+        "display": "once at 2026-11-04 14:15"
+      },
+      "schedule_display": "once at 2026-11-04 14:15",
+      "repeat": {
+        "times": 1,
+        "completed": 0
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T03:24:42.241818+07:00",
+      "next_run_at": "2026-11-04T14:15:00+07:00",
+      "last_run_at": null,
+      "last_status": null,
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "origin",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566545496569413795",
+        "chat_name": "Růže House / #preview-token / Test ruzena",
+        "thread_id": "1566545496569413795",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": [
+        "terminal",
+        "files"
+      ],
+      "workdir": null
+    },
+    {
+      "id": "aab2824d429b",
+      "name": "agent-mint-radar",
+      "prompt": "Script-only radar: scans BSC for identity-gated agent mints, alerts on free pool 90% within 6h or paid +1000 shares in 1h. Empty stdout = silent tick.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "agent_mint_radar.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "interval",
+        "minutes": 2,
+        "display": "every 2m"
+      },
+      "schedule_display": "every 2m",
+      "repeat": {
+        "times": null,
+        "completed": 128
+      },
+      "enabled": true,
+      "state": "scheduled",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T04:06:35.964171+07:00",
+      "next_run_at": "2026-11-02T10:29:35.696082+07:00",
+      "last_run_at": "2026-11-02T10:27:35.696082+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "discord:1566558388928905236",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566550289094541312",
+        "chat_name": "Růže House / #preview-token / Analisa mint agent fagent.online",
+        "thread_id": "1566550289094541312",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "failure_deliver": "discord:1566558388928905236",
+      "fire_claim": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-11-02T10:26:33.118595+07:00",
+        "dispatched_at": "2026-11-02T10:27:10.407309+07:00",
+        "lateness_seconds": 37.3,
+        "kind": "on_time"
+      }
+    }
+  ],
+  "updated_at": "2026-11-02T03:32:02.109Z"
+}
