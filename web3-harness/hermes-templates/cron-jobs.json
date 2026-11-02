@@ -130,14 +130,11 @@
       "model": null,
       "provider": null,
       "base_url": null,
-      "script": null,
-      "no_agent": false,
-      "monitor_script": "pierre_digest_gate.py",
+      "script": "pierre_digest_gate.py",
+      "no_agent": true,
+      "monitor_script": null,
       "monitor_url": null,
-      "monitor_state": {
-        "last_output_hash": "1e5e6bc7db4cf611258e3d7c2d2ee34c40ec94e06a53d61e00d8b4e34604b62d",
-        "last_changed_at": "2026-11-02T01:25:07.667695+08:00"
-      },
+      "monitor_state": null,
       "context_from": [
         "self"
       ],

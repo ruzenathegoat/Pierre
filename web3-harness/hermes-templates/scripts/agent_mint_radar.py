@@ -1,36 +1,36 @@
 #!/usr/bin/env python3
 """Radar for identity-gated agent mints on BSC, tuned for FREE MINT hunting.
 
-Silent by design: prints NOTHING unless a tracked mint trips a filter. Empty
-stdout + exit 0 is the healthy case, so this never spams the channel.
+Silent by design when no filter trips: prints NOTHING unless a tracked mint
+trips Filter D (New Contract), Filter A (New Free Pool), Filter B (Free Pool
+Low/Depleted), or Filter C (High Paid Velocity).
 
-Why the filters look like this (measured on the FAGENT mint, 1 Nov 2026):
-its 4,444 free shares were 50% gone at 2.34h and 100% gone at 2.85h after
-`startedAt()`, while the paid pool took 8.14h to sell out. An alert that fires
-at "90% claimed" leaves ~12 minutes to act, so the useful signal is a mint that
-has just OPENED with free room left.
-
-Filter A  mint opened inside FRESH_S and free pool still has >= LOW_LEFT% left
-Filter B  free pool dropped under LOW_LEFT% left (heads-up, with ETA to empty)
-Filter C  paid shares grew >= PAID_DELTA inside the last 60 minutes
-          (a paid sellout closes the free lane immediately)
-
-Every alert carries a per-wallet eligibility line, because this class of mint
-gates claimFree() behind an identity (hasAgentId / identityOf / gate NFT). An
-alert nobody can act on is noise.
+When a filter trips:
+  1. Sends a Minimalist, Clean, Luxury Rich Embed (Zero-Emoji) directly to the
+     Discord Webhook (#preview-token).
+  2. Prints the structured plain-text summary to stdout for #agent-mint-watch.
 """
+import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 
 try:
     from Crypto.Hash import keccak
 except ImportError:
+    _venv_py = os.path.expanduser("~/.hermes/hermes-agent/venv/bin/python")
+    if os.path.exists(_venv_py) and os.path.abspath(sys.executable) != os.path.abspath(_venv_py):
+        os.execv(_venv_py, [_venv_py] + sys.argv)
     sys.exit(0)          # silent: a cron crash here must not page anyone
 
 STATE = os.path.expanduser("~/.hermes/cache/agent_mint_radar_state.json")
+PREVIEW_WEBHOOK_ENV = os.path.expanduser("~/.hermes/secrets/positions_webhook_preview.env")
+HARNESS_ENV = os.path.expanduser("~/.hermes/web3-harness/.env")
 
 RPCS = ["https://rpc-bsc.48.club", "https://bsc-dataseed.binance.org"]
 SCAN_BLOCKS = int(os.environ.get("RADAR_SCAN_BLOCKS", "2000"))   # ~25 min of BSC
@@ -43,15 +43,57 @@ MAX_CANDIDATES = int(os.environ.get("RADAR_MAX_CANDIDATES", "14"))
 PAID_REDEDUPE_S = 3 * 3600
 FRESH_REDEDUPE_S = 6 * 3600
 
-# Wallets whose eligibility is reported in every alert.
-# Override with RADAR_WALLETS="0xabc...,0xdef..." once the agentic wallet is added.
+# Both Dual-Wallet addresses checked for .ai Agent ID / Gate NFT eligibility:
+# 1. Wallet II (Binance Agentic Wallet .ai MPC)
+# 2. Wallet I  (Viem EOA Self-Custody)
+WALLET_LABELS = {
+    "0x74624463e902c11ab37c0034eb216a2b4466269f": "Wallet II · Agentic .ai",
+    "0xbad577476432726c45267e2b57602dd4594a936c": "Wallet I · Viem EOA",
+}
+
 WALLETS = [w.strip().lower() for w in os.environ.get(
     "RADAR_WALLETS",
-    "0xbad577476432726c45267e2b57602dd4594a936c",   # self-custody (web3-harness)
+    "0x74624463e902c11ab37c0034eb216a2b4466269f,0xbad577476432726c45267e2b57602dd4594a936c",
 ).split(",") if w.strip()]
 
 FREE_TOPIC = None
 MINT_TOPIC = None
+
+
+def read_webhook_url():
+    for path, keys in [
+        (PREVIEW_WEBHOOK_ENV, ("WEBHOOK_URL", "DISCORD_WEBHOOK_PREVIEW_TOKEN")),
+        (HARNESS_ENV, ("DISCORD_WEBHOOK_PREVIEW_TOKEN", "DISCORD_WEBHOOK_POSITIONS")),
+    ]:
+        if not os.path.exists(path):
+            continue
+        try:
+            content = open(path, encoding="utf-8").read()
+            for k in keys:
+                m = re.search(rf"^{k}=(.*)$", content, re.M)
+                if m:
+                    val = m.group(1).strip().strip("'\"")
+                    if val.startswith("https://discord.com/api/webhooks/"):
+                        return val
+        except OSError:
+            pass
+    return ""
+
+
+def post_webhook(url, payload):
+    if not url:
+        return 0
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("User-Agent", "Pierre-Mint-Radar/1.0")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+    except Exception:
+        return 0
 
 
 def topic(sig):
@@ -136,6 +178,7 @@ def eligibility(ca, wallets):
     gate = addr_view(ca, ["identity()", "gate()", "registry()", "agentIdRegistry()"])
     lines = []
     for w in wallets:
+        label = WALLET_LABELS.get(w.lower(), f"{w[:6]}…{w[-4:]}")
         ok, kind = None, "Agent ID"
         for sig in ("hasAgentId(address)", "hasIdentity(address)"):
             r = view(ca, sig, w)
@@ -154,8 +197,8 @@ def eligibility(ca, wallets):
             kind = "gate NFT"
             r = call(gate, "0x" + sel("balanceOf(address)") + pad(w))
             ok = bool(r and int(r, 16) > 0)
-        lines.append(f"{'ELIGIBLE' if ok else 'TIDAK eligible'} ({kind}) `{w}`"
-                     if ok is not None else f"eligibilitas tidak kebaca `{w}`")
+        lines.append(f"`{label}`: {'ELIGIBLE' if ok else 'NOT ELIGIBLE'} ({kind})"
+                     if ok is not None else f"`{label}`: UNVERIFIED")
     return lines
 
 
@@ -167,7 +210,7 @@ def load_state():
         return {"contracts": {}, "alerts": {}}
 
 
-NOSTATE = os.environ.get("RADAR_NOSTATE") == "1"   # manual test mode: never burn dedupe keys
+NOSTATE = os.environ.get("RADAR_NOSTATE") == "1" or "--test-webhook" in sys.argv
 
 
 def save_state(st):
@@ -211,10 +254,29 @@ def shares_minted_since(ca, blocks_back):
     return total
 
 
+def build_embed(signal_label, sym, ca, common, paid_txt, price_txt, age_txt, elig_lines, color):
+    wib = datetime.timezone(datetime.timedelta(hours=7))
+    ts_wib = datetime.datetime.now(wib).strftime("%Y-%m-%d %H:%M WIB")
+    return {
+        "author": {"name": f"RŮŽE HOUSE  ·  AGENT MINT RADAR  ·  {signal_label}"},
+        "title": f"{sym}  ·  BSC Identity-Gated Mint",
+        "url": f"https://bscscan.com/address/{ca}",
+        "color": color,
+        "fields": [
+            {"name": "CONTRACT", "value": f"`{ca}`", "inline": False},
+            {"name": "FREE POOL", "value": common.replace("Free Pool: ", ""), "inline": False},
+            {"name": "PAID POOL & PRICE", "value": f"Paid `{paid_txt}`  ·  Price `{price_txt} BNB`  ·  Age `{age_txt}`", "inline": False},
+            {"name": "DUAL-WALLET ELIGIBILITY", "value": "\n".join(elig_lines), "inline": False},
+        ],
+        "footer": {"text": f"Pierre Execution Desk  ·  BSC Mint Radar  ·  {ts_wib}"},
+    }
+
+
 def main():
     global FREE_TOPIC, MINT_TOPIC
     FREE_TOPIC = topic("FreeClaimed(address,bytes32)")
     MINT_TOPIC = topic("Minted(address,bytes32,uint256,bytes32)")
+    test_mode = "--test-webhook" in sys.argv
 
     latest = int(rpc("eth_blockNumber", []), 16)
     st = load_state()
@@ -222,15 +284,19 @@ def main():
     alerts = st.setdefault("alerts", {})
     now = int(time.time())
 
-    seen = scan_new_events(latest)
+    seen = set(tracked.keys()) if test_mode else scan_new_events(latest)
     for ca in list(tracked):
         if not tracked[ca].get("done"):
             seen.add(ca)
     candidates = [c for c in seen if not tracked.get(c, {}).get("done")][:MAX_CANDIDATES]
 
     messages = []
+    embeds = []
     for ca in candidates:
+        is_new_contract = ca not in tracked
         t = tracked.setdefault(ca, {"first_seen": now, "hist": [], "free_hist": []})
+        t.setdefault("hist", [])
+        t.setdefault("free_hist", [])
         if not t.get("sym"):
             t["sym"] = sym_of(ca)
 
@@ -256,7 +322,7 @@ def main():
         paid_txt = f"{sold:,}/{max_paid:,}" if max_paid else f"{sold:,}/?"
 
         start_ts = started if started else t["first_seen"]
-        age = now - start_ts
+        age = max(0, now - start_ts)
         left = max(0, max_free - free)
         left_pct = (left / max_free * 100) if max_free else 0
 
@@ -265,7 +331,6 @@ def main():
         t["free_hist"].append([now, free])
         t["free_hist"] = [h for h in t["free_hist"] if h[0] >= now - 3600][-60:]
 
-        # free-claim rate from observed ticks, else from the mint's own age
         rate = None
         if len(t["free_hist"]) >= 2 and t["free_hist"][0][1] != free:
             span = max(60, t["free_hist"][-1][0] - t["free_hist"][0][0])
@@ -274,7 +339,7 @@ def main():
             rate = free / age * 3600.0
         eta = (left / rate * 60) if (rate and rate > 0 and left) else None
         if eta is not None and eta > 1440:
-            eta = None       # too slow to be a deadline; the rate line already tells the story
+            eta = None
 
         common = (f"Free Pool: `{free:,} / {max_free:,}` ({100 * free / max_free:.0f}% claimed  ·  `{left:,}` left)"
                   if max_free else "Free Pool: `None`")
@@ -283,17 +348,43 @@ def main():
         elif rate:
             common += f"  ·  Velocity: `{rate:,.0f}/h`"
 
+        # ---- filter D: brand-new contract discovered on BSC (or --test-webhook)
+        keyD = f"{ca}:seen"
+        if (test_mode and len(embeds) < 2) or (is_new_contract and now - alerts.get(keyD, 0) > 86400):
+            if not test_mode:
+                alerts[keyD] = now
+            elig_lines = eligibility(ca, WALLETS)
+            sig_label = "RADAR SNAPSHOT" if test_mode else "NEW CONTRACT"
+            messages.append(
+                f"**MINT RADAR  ·  {sig_label}  ·  {t['sym']}**\n"
+                f"Contract: `{ca}`  ·  [BscScan](<https://bscscan.com/address/{ca}>)\n"
+                f"{common}\n"
+                f"Paid Pool: `{paid_txt}`  ·  Price: `{price_txt}`  ·  Age: `{age / 60:.0f}m`\n"
+                + "\n".join(f"Eligibility: {line}" for line in elig_lines)
+            )
+            embeds.append(build_embed(
+                sig_label, t["sym"], ca, common, paid_txt, price_txt,
+                f"{age / 60:.0f}m", elig_lines, 13082451 if left == 0 else 1096065
+            ))
+            if test_mode and len(embeds) >= 2:
+                break
+
         # ---- filter A: fresh mint, free room still available (the actionable one)
         keyA = f"{ca}:fresh"
         if left and age <= FRESH_S and left_pct >= LOW_LEFT and now - alerts.get(keyA, 0) > FRESH_REDEDUPE_S:
             alerts[keyA] = now
+            elig_lines = eligibility(ca, WALLETS)
             messages.append(
                 f"**MINT RADAR  ·  NEW FREE POOL  ·  {t['sym']}**\n"
                 f"Contract: `{ca}`  ·  [BscScan](<https://bscscan.com/address/{ca}>)\n"
                 f"{common}\n"
                 f"Paid Pool: `{paid_txt}`  ·  Price: `{price_txt}`  ·  Age: `{age / 60:.0f}m`\n"
-                + "\n".join(f"Eligibility: {line}" for line in eligibility(ca, WALLETS))
+                + "\n".join(f"Eligibility: {line}" for line in elig_lines)
             )
+            embeds.append(build_embed(
+                "NEW FREE POOL", t["sym"], ca, common, paid_txt, price_txt,
+                f"{age / 60:.0f}m", elig_lines, 1096065
+            ))
             continue
 
         # ---- filter B: free pool about to run out (or just ran out)
@@ -302,14 +393,18 @@ def main():
                 and (left == 0 or left_pct < LOW_LEFT)
                 and now - alerts.get(keyB, 0) > FREE_WINDOW_S):
             alerts[keyB] = now
-            head = (f"**MINT RADAR  ·  FREE POOL DEPLETED  ·  {t['sym']}**" if left == 0
-                    else f"**MINT RADAR  ·  FREE POOL LOW ({left_pct:.0f}% LEFT)  ·  {t['sym']}**")
+            elig_lines = eligibility(ca, WALLETS)
+            sig_b = "FREE POOL DEPLETED" if left == 0 else f"FREE POOL LOW ({left_pct:.0f}% LEFT)"
             messages.append(
-                f"{head}\n"
+                f"**MINT RADAR  ·  {sig_b}  ·  {t['sym']}**\n"
                 f"Contract: `{ca}`  ·  [BscScan](<https://bscscan.com/address/{ca}>)\n"
                 f"{common}  ·  Age: `{age / 3600:.1f}h`\n"
-                + "\n".join(f"Eligibility: {line}" for line in eligibility(ca, WALLETS))
+                + "\n".join(f"Eligibility: {line}" for line in elig_lines)
             )
+            embeds.append(build_embed(
+                sig_b, t["sym"], ca, common, paid_txt, price_txt,
+                f"{age / 3600:.1f}h", elig_lines, 6582923 if left == 0 else 13082451
+            ))
 
         # ---- filter C: paid velocity (sellout closes the free lane)
         old = [h for h in t["hist"] if h[0] <= now - PAID_WINDOW_S]
@@ -323,16 +418,28 @@ def main():
         keyC = f"{ca}:paid"
         if delta >= PAID_DELTA and now - alerts.get(keyC, 0) > PAID_REDEDUPE_S:
             alerts[keyC] = now
+            elig_lines = eligibility(ca, WALLETS)
             messages.append(
                 f"**MINT RADAR  ·  HIGH PAID VELOCITY  ·  {t['sym']}**\n"
                 f"Contract: `{ca}`  ·  [BscScan](<https://bscscan.com/address/{ca}>)\n"
                 f"Paid Delta: `+{delta:,}` in `{PAID_WINDOW_S // 60}m` (Total `{paid_txt}`)\n"
                 f"{common}"
             )
+            embeds.append(build_embed(
+                f"HIGH PAID VELOCITY (+{delta:,}/1H)", t["sym"], ca, common, paid_txt, price_txt,
+                f"{age / 60:.0f}m", elig_lines, 13082451
+            ))
 
     if len(alerts) > 4000:
         st["alerts"] = {k: v for k, v in alerts.items() if now - v < 30 * 86400}
     save_state(st)
+
+    if embeds:
+        webhook_url = read_webhook_url()
+        post_webhook(webhook_url, {
+            "username": "Pierre  |  Mint Radar",
+            "embeds": embeds[:6],
+        })
 
     if messages:
         print("\n\n".join(messages[:6]))

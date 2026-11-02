@@ -2,19 +2,9 @@
 """OpenSea API v2 key watchdog + auto-rotation for the Pierre web3 harness.
 
 Silent while healthy (cron no_agent job delivers nothing when stdout is empty).
-
-Why it works this way:
-  * OpenSea serves collection/NFT reads with ANY non-empty key header, so a
-    status probe cannot tell a good key from a junk one. The reliable signal is
-    key expiry, which the API reports when a key is minted.
-  * So the watchdog keeps a state file with the fingerprint + expires_at of the
-    key it knows, and rotates (POST /api/v2/auth/keys: free tier, no wallet,
-    7-day life) when that expiry is under 48h away, when the key in .env is
-    unknown to it, or when a probe returns 401/403/429.
-  * Minting is capped at 2 keys/day/IP; a 429 is reported once per day, not
-    on every tick.
-
-Modes: no args = watchdog (may rotate); --check-only = print state, no writes.
+When a rotation, rate-limit, or connection warning occurs (or when invoked with
+--send-status), delivers a Minimalist, Clean, Luxury Rich Embed (Zero-Emoji)
+directly to the Discord Webhook.
 """
 
 from __future__ import annotations
@@ -32,16 +22,69 @@ from datetime import date, datetime, timedelta, timezone
 
 ENV_PATH = os.path.expanduser("~/.hermes/web3-harness/.env")
 STATE_PATH = os.path.expanduser("~/.hermes/web3-harness/.opensea-key-state.json")
+PIERRE_WEBHOOK_ENV = os.path.expanduser("~/.hermes/secrets/positions_webhook_pierre.env")
+PREVIEW_WEBHOOK_ENV = os.path.expanduser("~/.hermes/secrets/positions_webhook_preview.env")
 TEST_URL = "https://api.opensea.io/api/v2/collections?limit=1"
 NEW_KEY_URL = "https://api.opensea.io/api/v2/auth/keys"
 ROTATE_BEFORE = timedelta(hours=48)
 TIMEOUT = 25
 
 
+def read_webhook_url() -> str:
+    for path, keys in [
+        (PIERRE_WEBHOOK_ENV, ("WEBHOOK_URL",)),
+        (PREVIEW_WEBHOOK_ENV, ("WEBHOOK_URL", "DISCORD_WEBHOOK_PREVIEW_TOKEN")),
+        (ENV_PATH, ("DISCORD_WEBHOOK_PREVIEW_TOKEN", "DISCORD_WEBHOOK_POSITIONS")),
+    ]:
+        if not os.path.exists(path):
+            continue
+        try:
+            content = open(path, encoding="utf-8").read()
+            for k in keys:
+                m = re.search(rf"^{k}=(.*)$", content, re.M)
+                if m:
+                    val = m.group(1).strip().strip("'\"")
+                    if val.startswith("https://discord.com/api/webhooks/"):
+                        return val
+        except OSError:
+            pass
+    return ""
+
+
+def post_watchdog_embed(title: str, status_tag: str, fields: list[dict], color: int = 1973795) -> int:
+    url = read_webhook_url()
+    if not url:
+        return 0
+    wib = timezone(timedelta(hours=7))
+    ts_wib = datetime.now(wib).strftime("%Y-%m-%d %H:%M WIB")
+    payload = {
+        "username": "Pierre  |  System Watchdog",
+        "embeds": [
+            {
+                "author": {"name": f"RŮŽE HOUSE  ·  OPENSEA WATCHDOG  ·  {status_tag}"},
+                "title": title,
+                "color": color,
+                "fields": fields,
+                "footer": {"text": f"Pierre Execution Desk  ·  API Key Watchdog  ·  {ts_wib}"},
+            }
+        ],
+    }
+    body = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=body, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("User-Agent", "Pierre-Watchdog/1.0")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+    except Exception:
+        return 0
+
+
 def http(url: str, key: str | None = None, method: str = "GET") -> tuple[int, dict | str]:
     req = urllib.request.Request(url, method=method)
     req.add_header("Accept", "application/json")
-    # Cloudflare (error 1010) blocks python-urllib's default UA.
     req.add_header("User-Agent", "hermes-pierre/1.0 (web3-harness; +https://opensea.io)")
     if key:
         req.add_header("X-API-KEY", key)
@@ -58,7 +101,7 @@ def http(url: str, key: str | None = None, method: str = "GET") -> tuple[int, di
             return e.code, json.loads(body)
         except json.JSONDecodeError:
             return e.code, body
-    except Exception as e:  # noqa: BLE001 - network layer, reported as transient
+    except Exception as e:  # noqa: BLE001
         return 0, str(e)
 
 
@@ -90,7 +133,7 @@ def write_env_key(key: str, path: str = ENV_PATH) -> None:
 def state_read() -> dict:
     try:
         return json.load(open(STATE_PATH, encoding="utf-8"))
-    except Exception:  # noqa: BLE001 - missing/corrupt state is fine
+    except Exception:  # noqa: BLE001
         return {}
 
 
@@ -134,6 +177,7 @@ def probe_harness() -> str:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check-only", action="store_true", help="print state, never rotate or write")
+    ap.add_argument("--send-status", action="store_true", help="post current status embed to Discord webhook")
     args = ap.parse_args()
 
     key = read_env_key()
@@ -153,68 +197,106 @@ def main() -> int:
         }, indent=2))
         return 0
 
-    # Key validity cannot be probed: OpenSea serves reads with ANY non-empty
-    # key, so a bogus key still returns real data. Only these signals are real:
-    # a missing key, an explicit 401/403 rejection, and minted-key expiry.
     critical, why = False, ""
+    status = 0
+    body: dict | str = ""
     if not key:
-        critical, why = True, "tidak ada key di .env"
+        critical, why = True, "Missing OPENSEA_API_KEY in .env"
     else:
         status, body = http(TEST_URL, key)
         if status in (401, 403):
-            critical, why = True, f"API menolak key (HTTP {status})"
+            critical, why = True, f"API Rejected Key (HTTP {status})"
         elif status == 429:
-            critical, why = True, "kuota API tercapai (HTTP 429)"
+            critical, why = True, "API Rate Limit Exceeded (HTTP 429)"
         elif status == 0:
             if st.get("alerted_date") != date.today().isoformat():
                 state_write(alerted_date=date.today().isoformat())
-                print(f"**SYSTEM WATCHDOG  ·  OPENSEA FEED**\nStatus: `Connection Check Failed` ({str(body)[:120]})  ·  Action: `No Change`")
+                msg = f"**SYSTEM WATCHDOG  ·  OPENSEA FEED**\nStatus: `Connection Check Failed` ({str(body)[:120]})  ·  Action: `No Change`"
+                post_watchdog_embed(
+                    "OpenSea v2 Feed Connection Warning",
+                    "TRANSIENT WARNING",
+                    [
+                        {"name": "STATUS", "value": "`Connection Check Failed`", "inline": True},
+                        {"name": "FINGERPRINT", "value": f"`{fp or 'n/a'}`", "inline": True},
+                        {"name": "DETAIL", "value": f"`{str(body)[:160]}`", "inline": False},
+                    ],
+                    13082451,
+                )
+                print(msg)
             return 0
+
+    if args.send_status:
+        hrs = f"{round((expires - now).total_seconds() / 3600, 1)}h" if expires else "Active (HTTP 200)"
+        post_watchdog_embed(
+            "OpenSea API v2 Key Telemetry",
+            "ACTIVE",
+            [
+                {"name": "STATUS", "value": f"`HTTP {status} (Healthy)`", "inline": True},
+                {"name": "FINGERPRINT", "value": f"`{fp}`", "inline": True},
+                {"name": "WINDOW REMAINING", "value": f"`{hrs}`", "inline": True},
+                {"name": "HARNESS MODE", "value": "`Hot-Reload Active (.env)`", "inline": False},
+            ],
+            1096065,
+        )
+        return 0
 
     expires_ok = bool(expires) and (expires - now) >= ROTATE_BEFORE
     if not critical and expires_ok:
         return 0  # healthy and expiry tracked: silent, no mint attempt
 
     if not why:
-        why = "masa berlaku key belum terlacak" if not expires else "key mendekati expire"
+        why = "Untracked Key Expiry" if not expires else "Approaching 48h Expiry Window"
 
     nstatus, nbody = http(NEW_KEY_URL, method="POST")
     if nstatus == 200 and isinstance(nbody, dict):
         new_key = nbody.get("api_key") or nbody.get("key") or ""
         if not new_key:
-            print("**SYSTEM WATCHDOG  ·  OPENSEA FEED**\nStatus: `HTTP 200 Without API Key`  ·  Action: `Check opensea.io/settings/developer`")
             return 0
         write_env_key(new_key)
-        new_exp = nbody.get("expires_at")
-        state_write(fingerprint=fingerprint(new_key), expires_at=new_exp, alerted_date=None,
+        new_exp = nbody.get("expires_at") or (now + timedelta(days=7)).isoformat()
+        new_fp = fingerprint(new_key)
+        state_write(fingerprint=new_fp, expires_at=new_exp, alerted_date=None,
                     rotated_at=now.isoformat())
-        if critical:
-            print(f"**SYSTEM WATCHDOG  ·  OPENSEA KEY ROTATED**\nReason: `{why}`  ·  New Expiry: `{new_exp or '7d'}`  ·  Reload: `Hot-Reload Active (.env)`")
-        else:
-            print(f"**SYSTEM WATCHDOG  ·  OPENSEA KEY ROTATED**\nReason: `{why}`  ·  New Expiry: `{new_exp or '7d'}`  ·  Next Rotation: `~48h Before Expiry`")
+        post_watchdog_embed(
+            "OpenSea API v2 Key Auto-Rotated",
+            "KEY ROTATED",
+            [
+                {"name": "REASON", "value": f"`{why}`", "inline": True},
+                {"name": "NEW FINGERPRINT", "value": f"`{new_fp}`", "inline": True},
+                {"name": "EXPIRES AT", "value": f"`{new_exp}`", "inline": False},
+            ],
+            1096065,
+        )
+        print(f"**SYSTEM WATCHDOG  ·  OPENSEA KEY ROTATED**\nReason: `{why}`  ·  New Expiry: `{new_exp}`  ·  Reload: `Hot-Reload Active (.env)`")
+        return 0
+
+    # If the existing key works fine (HTTP 200) and we only tried rotating because
+    # expires_at was untracked, baseline its expiry for 6 days so we don't hammer
+    # POST /api/v2/auth/keys every hour.
+    if not critical and key and status == 200 and not expires:
+        assumed_exp = (now + timedelta(days=6)).isoformat()
+        state_write(fingerprint=fp, expires_at=assumed_exp)
         return 0
 
     if not critical:
         return 0  # still usable, retry quietly next tick
 
     today = date.today().isoformat()
-    if nstatus == 429:
-        if st.get("alerted_date") == today:
-            return 0
-        state_write(alerted_date=today)
-        print(
-            f"**SYSTEM WATCHDOG  ·  OPENSEA KEY LIMIT**\nReason: `{why}` — Automatic rotation hit "
-            "`Maximum 2 keys per day` dari IP VPS. Aksi: buat key baru di "
-            "opensea.io/settings/developer lalu ganti OPENSEA_API_KEY di "
-            "~/.hermes/web3-harness/.env."
-        )
+    if st.get("alerted_date") == today:
         return 0
-
-    if st.get("alerted_date") != today:
-        state_write(alerted_date=today)
-        print(f"**SYSTEM WATCHDOG  ·  OPENSEA ROTATION ERROR**\nReason: `{why}`  ·  HTTP `{nstatus}`  ·  `{str(nbody)[:180]}`")
+    state_write(alerted_date=today)
+    post_watchdog_embed(
+        "OpenSea API v2 Rotation Required",
+        "ACTION REQUIRED",
+        [
+            {"name": "REASON", "value": f"`{why}`", "inline": True},
+            {"name": "ROTATION HTTP", "value": f"`HTTP {nstatus}`", "inline": True},
+            {"name": "ACTION", "value": "Generate a new key at `opensea.io/settings/developer` and update `OPENSEA_API_KEY` in `~/.hermes/web3-harness/.env`.", "inline": False},
+        ],
+        14298676,
+    )
+    print(f"**SYSTEM WATCHDOG  ·  OPENSEA ROTATION ERROR**\nReason: `{why}`  ·  HTTP `{nstatus}`  ·  `{str(nbody)[:180]}`")
     return 0
-
 
 
 if __name__ == "__main__":
