@@ -18,13 +18,6 @@ import sys
 import urllib.error
 import urllib.request
 
-try:
-    from Crypto.Hash import keccak  # noqa: F401
-except ImportError:
-    _venv_py = os.path.expanduser("~/.hermes/hermes-agent/venv/bin/python")
-    if os.path.exists(_venv_py) and os.path.abspath(sys.executable) != os.path.abspath(_venv_py):
-        os.execv(_venv_py, [_venv_py] + sys.argv)
-
 DB = os.path.expanduser("~/.hermes/web3-harness/trades.db")
 PREVIEW_WEBHOOK_ENV = os.path.expanduser("~/.hermes/secrets/positions_webhook_preview.env")
 HARNESS_ENV = os.path.expanduser("~/.hermes/web3-harness/.env")
@@ -34,6 +27,53 @@ WALLET_I = "0xbad577476432726c45267e2b57602dd4594a936c"
 WALLET_II = "0x74624463e902c11ab37c0034eb216a2b4466269f"
 BNBBABY_TOKEN = "0xd0079025a9bb66a7a1de991de2e4326faba35729"
 BNBBABY_MINT = "0xbb7ed59ca41ea03cf20084a8c9de94244b7b2637"
+
+_KECCAK_RC = [
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+]
+_KECCAK_ROT = [
+    [0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61],
+    [28, 55, 25, 21, 56], [27, 20, 39, 8, 14],
+]
+_MASK64 = 0xFFFFFFFFFFFFFFFF
+
+
+def _rol64(x: int, n: int) -> int:
+    return ((x << n) | (x >> (64 - n))) & _MASK64
+
+
+def keccak256_hex(msg: bytes) -> str:
+    """Pure-Python Ethereum Keccak-256 (0x01 padding, zero external dependencies)."""
+    rate = 136
+    buf = bytearray(msg)
+    buf.append(0x01)
+    while len(buf) % rate != 0:
+        buf.append(0x00)
+    buf[-1] ^= 0x80
+    st = [[0] * 5 for _ in range(5)]
+    for off in range(0, len(buf), rate):
+        for i in range(rate // 8):
+            st[i % 5][i // 5] ^= int.from_bytes(buf[off + i * 8:off + (i + 1) * 8], "little")
+        for rc in _KECCAK_RC:
+            c = [st[x][0] ^ st[x][1] ^ st[x][2] ^ st[x][3] ^ st[x][4] for x in range(5)]
+            d = [c[(x - 1) % 5] ^ _rol64(c[(x + 1) % 5], 1) for x in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    st[x][y] ^= d[x]
+            b = [[0] * 5 for _ in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    b[y][(2 * x + 3 * y) % 5] = _rol64(st[x][y], _KECCAK_ROT[x][y])
+            for x in range(5):
+                for y in range(5):
+                    st[x][y] = b[x][y] ^ ((~b[(x + 1) % 5][y]) & b[(x + 2) % 5][y] & _MASK64)
+            st[0][0] ^= rc
+    return b"".join(st[i % 5][i // 5].to_bytes(8, "little") for i in range(4)).hex()
 
 
 def read_webhook_url() -> str:
@@ -89,20 +129,14 @@ def rpc_call(to: str, data: str) -> str | None:
             ).stdout
             res = json.loads(out).get("result")
             if res and res != "0x":
-                return res
+                return str(res)
         except Exception:
             continue
     return None
 
 
 def keccak_sel(sig: str) -> str:
-    try:
-        from Crypto.Hash import keccak
-        k = keccak.new(digest_bits=256)
-        k.update(sig.encode())
-        return "0x" + k.hexdigest()[:8]
-    except Exception:
-        return "0x"
+    return "0x" + keccak256_hex(sig.encode("utf-8"))[:8]
 
 
 def read_uint(to: str, sigs: list[str]) -> int | None:
@@ -132,10 +166,10 @@ def fetch_dexscreener(contract_address: str) -> dict | None:
 
 
 def build_position_field(row: dict) -> dict:
-    chain = (row["chain"] or "bsc").upper()
+    chain = str(row["chain"] or "bsc").upper()
     native_sym = "BNB" if chain == "BSC" else "ETH"
-    ca = (row["contract_address"] or "").lower()
-    name = row["asset_name"] or "Unknown Asset"
+    ca = str(row["contract_address"] or "").lower()
+    name = str(row["asset_name"] or "Unknown Asset")
     entry = float(row["entry_price_eth"] or 0.0)
     hwm = float(row["high_water_mark_eth"] or entry)
     wallet_tag = "Wallet II · Agentic .ai" if row["token_id"] == "BAW_MPC" else "Wallet I · Viem EOA"

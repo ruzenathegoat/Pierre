@@ -7,9 +7,11 @@ Low/Depleted), or Filter C (High Paid Velocity).
 
 When a filter trips:
   1. Sends a Minimalist, Clean, Luxury Rich Embed (Zero-Emoji) directly to the
-     Discord Webhook (#preview-token).
-  2. Prints the structured plain-text summary to stdout for #agent-mint-watch.
+     Discord Webhook (#agent-mint-radar).
+  2. Falls back to stdout plain-text summary if webhook is unavailable.
 """
+from __future__ import annotations
+
 import datetime
 import json
 import os
@@ -19,14 +21,6 @@ import sys
 import time
 import urllib.error
 import urllib.request
-
-try:
-    from Crypto.Hash import keccak
-except ImportError:
-    _venv_py = os.path.expanduser("~/.hermes/hermes-agent/venv/bin/python")
-    if os.path.exists(_venv_py) and os.path.abspath(sys.executable) != os.path.abspath(_venv_py):
-        os.execv(_venv_py, [_venv_py] + sys.argv)
-    sys.exit(0)          # silent: a cron crash here must not page anyone
 
 STATE = os.path.expanduser("~/.hermes/cache/agent_mint_radar_state.json")
 RADAR_WEBHOOK_ENV = os.path.expanduser("~/.hermes/secrets/positions_webhook_radar.env")
@@ -56,11 +50,58 @@ WALLETS = [w.strip().lower() for w in os.environ.get(
     "0x74624463e902c11ab37c0034eb216a2b4466269f,0xbad577476432726c45267e2b57602dd4594a936c",
 ).split(",") if w.strip()]
 
-FREE_TOPIC = None
-MINT_TOPIC = None
+FREE_TOPIC = ""
+MINT_TOPIC = ""
+
+_KECCAK_RC = [
+    0x0000000000000001, 0x0000000000008082, 0x800000000000808A, 0x8000000080008000,
+    0x000000000000808B, 0x0000000080000001, 0x8000000080008081, 0x8000000000008009,
+    0x000000000000008A, 0x0000000000000088, 0x0000000080008009, 0x000000008000000A,
+    0x000000008000808B, 0x800000000000008B, 0x8000000000008089, 0x8000000000008003,
+    0x8000000000008002, 0x8000000000000080, 0x000000000000800A, 0x800000008000000A,
+    0x8000000080008081, 0x8000000000008080, 0x0000000080000001, 0x8000000080008008,
+]
+_KECCAK_ROT = [
+    [0, 36, 3, 41, 18], [1, 44, 10, 45, 2], [62, 6, 43, 15, 61],
+    [28, 55, 25, 21, 56], [27, 20, 39, 8, 14],
+]
+_MASK64 = 0xFFFFFFFFFFFFFFFF
 
 
-def read_webhook_url():
+def _rol64(x: int, n: int) -> int:
+    return ((x << n) | (x >> (64 - n))) & _MASK64
+
+
+def keccak256_hex(msg: bytes) -> str:
+    """Pure-Python Ethereum Keccak-256 (0x01 padding, zero external dependencies)."""
+    rate = 136
+    buf = bytearray(msg)
+    buf.append(0x01)
+    while len(buf) % rate != 0:
+        buf.append(0x00)
+    buf[-1] ^= 0x80
+    st = [[0] * 5 for _ in range(5)]
+    for off in range(0, len(buf), rate):
+        for i in range(rate // 8):
+            st[i % 5][i // 5] ^= int.from_bytes(buf[off + i * 8:off + (i + 1) * 8], "little")
+        for rc in _KECCAK_RC:
+            c = [st[x][0] ^ st[x][1] ^ st[x][2] ^ st[x][3] ^ st[x][4] for x in range(5)]
+            d = [c[(x - 1) % 5] ^ _rol64(c[(x + 1) % 5], 1) for x in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    st[x][y] ^= d[x]
+            b = [[0] * 5 for _ in range(5)]
+            for x in range(5):
+                for y in range(5):
+                    b[y][(2 * x + 3 * y) % 5] = _rol64(st[x][y], _KECCAK_ROT[x][y])
+            for x in range(5):
+                for y in range(5):
+                    st[x][y] = b[x][y] ^ ((~b[(x + 1) % 5][y]) & b[(x + 2) % 5][y] & _MASK64)
+            st[0][0] ^= rc
+    return b"".join(st[i % 5][i // 5].to_bytes(8, "little") for i in range(4)).hex()
+
+
+def read_webhook_url() -> str:
     for path, keys in [
         (RADAR_WEBHOOK_ENV, ("WEBHOOK_URL", "DISCORD_WEBHOOK_MINT_RADAR")),
         (HARNESS_ENV, ("DISCORD_WEBHOOK_MINT_RADAR",)),
@@ -80,7 +121,7 @@ def read_webhook_url():
     return ""
 
 
-def post_webhook(url, payload):
+def post_webhook(url: str, payload: dict) -> int:
     if not url:
         return 0
     body = json.dumps(payload).encode("utf-8")
@@ -96,13 +137,11 @@ def post_webhook(url, payload):
         return 0
 
 
-def topic(sig):
-    k = keccak.new(digest_bits=256)
-    k.update(sig.encode())
-    return "0x" + k.hexdigest()
+def topic(sig: str) -> str:
+    return "0x" + keccak256_hex(sig.encode("utf-8"))
 
 
-def rpc(method, params, url=None):
+def rpc(method: str, params: list, url: str | None = None):
     body = json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params})
     for u in ([url] if url else RPCS):
         out = subprocess.run(["curl", "-s", "-m", "20", "-X", "POST", u,
@@ -119,24 +158,24 @@ def rpc(method, params, url=None):
     return None
 
 
-def sel(sig):
+def sel(sig: str) -> str:
     return topic(sig)[2:10]
 
 
-def pad(a):
+def pad(a: str) -> str:
     return a.lower().replace("0x", "").rjust(64, "0")
 
 
-def call(to, data):
+def call(to: str, data: str) -> str | None:
     r = rpc("eth_call", [{"to": to, "data": data}, "latest"])
-    return None if r in (None, "0x") else r
+    return None if r in (None, "0x") else str(r)
 
 
-def view(to, sig, *args):
+def view(to: str, sig: str, *args: str) -> str | None:
     return call(to, "0x" + sel(sig) + "".join(pad(a) for a in args))
 
 
-def view_int(to, names):
+def view_int(to: str, names: list[str]) -> int | None:
     for sig in names:
         r = view(to, sig)
         if r is not None:
@@ -147,7 +186,7 @@ def view_int(to, names):
     return None
 
 
-def addr_view(to, names):
+def addr_view(to: str, names: list[str]) -> str | None:
     for sig in names:
         r = view(to, sig)
         if r is not None:
@@ -155,7 +194,7 @@ def addr_view(to, names):
     return None
 
 
-def qdecimals(ca):
+def qdecimals(ca: str) -> int:
     """Decimals of the payment token, so price() prints in human units."""
     q = addr_view(ca, ["quote()", "fist()", "paymentToken()"])
     if not q:
@@ -163,7 +202,7 @@ def qdecimals(ca):
     return view_int(q, ["decimals()"]) or 18
 
 
-def sym_of(to):
+def sym_of(to: str) -> str:
     r = view(to, "symbol()")
     if r is None:
         return "?"
@@ -173,13 +212,14 @@ def sym_of(to):
     return b[off + 32:off + 32 + ln].decode(errors="replace")[:20]
 
 
-def eligibility(ca, wallets):
+def eligibility(ca: str, wallets: list[str]) -> list[str]:
     """Can each tracked wallet actually call claimFree() on this contract?"""
     gate = addr_view(ca, ["identity()", "gate()", "registry()", "agentIdRegistry()"])
-    lines = []
+    lines: list[str] = []
     for w in wallets:
         label = WALLET_LABELS.get(w.lower(), f"{w[:6]}…{w[-4:]}")
-        ok, kind = None, "Agent ID"
+        ok: bool | None = None
+        kind = "Agent ID"
         for sig in ("hasAgentId(address)", "hasIdentity(address)"):
             r = view(ca, sig, w)
             if r is not None:
@@ -202,9 +242,9 @@ def eligibility(ca, wallets):
     return lines
 
 
-def load_state():
+def load_state() -> dict:
     try:
-        with open(STATE) as f:
+        with open(STATE, encoding="utf-8") as f:
             return json.load(f)
     except Exception:
         return {"contracts": {}, "alerts": {}}
@@ -213,18 +253,18 @@ def load_state():
 NOSTATE = os.environ.get("RADAR_NOSTATE") == "1" or "--test-webhook" in sys.argv
 
 
-def save_state(st):
+def save_state(st: dict) -> None:
     if NOSTATE:
         return
     os.makedirs(os.path.dirname(STATE), exist_ok=True)
     tmp = STATE + ".tmp"
-    with open(tmp, "w") as f:
+    with open(tmp, "w", encoding="utf-8") as f:
         json.dump(st, f)
     os.replace(tmp, STATE)
 
 
-def scan_new_events(latest):
-    found = set()
+def scan_new_events(latest: int) -> set[str]:
+    found: set[str] = set()
     lo = latest - SCAN_BLOCKS
     step, b = 1500, lo
     while b <= latest:
@@ -237,8 +277,11 @@ def scan_new_events(latest):
     return found
 
 
-def shares_minted_since(ca, blocks_back):
-    latest = int(rpc("eth_blockNumber", []), 16)
+def shares_minted_since(ca: str, blocks_back: int) -> int:
+    blk = rpc("eth_blockNumber", [])
+    if not blk:
+        return 0
+    latest = int(str(blk), 16)
     lo = latest - blocks_back
     total, b, step = 0, lo, 1500
     while b <= latest:
@@ -254,7 +297,17 @@ def shares_minted_since(ca, blocks_back):
     return total
 
 
-def build_embed(signal_label, sym, ca, common, paid_txt, price_txt, age_txt, elig_lines, color):
+def build_embed(
+    signal_label: str,
+    sym: str,
+    ca: str,
+    common: str,
+    paid_txt: str,
+    price_txt: str,
+    age_txt: str,
+    elig_lines: list[str],
+    color: int,
+) -> dict:
     wib = datetime.timezone(datetime.timedelta(hours=7))
     ts_wib = datetime.datetime.now(wib).strftime("%Y-%m-%d %H:%M WIB")
     return {
@@ -272,13 +325,16 @@ def build_embed(signal_label, sym, ca, common, paid_txt, price_txt, age_txt, eli
     }
 
 
-def main():
+def main() -> int:
     global FREE_TOPIC, MINT_TOPIC
     FREE_TOPIC = topic("FreeClaimed(address,bytes32)")
     MINT_TOPIC = topic("Minted(address,bytes32,uint256,bytes32)")
     test_mode = "--test-webhook" in sys.argv
 
-    latest = int(rpc("eth_blockNumber", []), 16)
+    blk = rpc("eth_blockNumber", [])
+    if not blk:
+        return 0
+    latest = int(str(blk), 16)
     st = load_state()
     tracked = st.setdefault("contracts", {})
     alerts = st.setdefault("alerts", {})
@@ -290,8 +346,8 @@ def main():
             seen.add(ca)
     candidates = [c for c in seen if not tracked.get(c, {}).get("done")][:MAX_CANDIDATES]
 
-    messages = []
-    embeds = []
+    messages: list[str] = []
+    embeds: list[dict] = []
     for ca in candidates:
         is_new_contract = ca not in tracked
         t = tracked.setdefault(ca, {"first_seen": now, "hist": [], "free_hist": []})
@@ -331,7 +387,7 @@ def main():
         t["free_hist"].append([now, free])
         t["free_hist"] = [h for h in t["free_hist"] if h[0] >= now - 3600][-60:]
 
-        rate = None
+        rate: float | None = None
         if len(t["free_hist"]) >= 2 and t["free_hist"][0][1] != free:
             span = max(60, t["free_hist"][-1][0] - t["free_hist"][0][0])
             rate = (free - t["free_hist"][0][1]) / span * 3600.0
@@ -343,7 +399,7 @@ def main():
 
         common = (f"Free Pool: `{free:,} / {max_free:,}` ({100 * free / max_free:.0f}% claimed  ·  `{left:,}` left)"
                   if max_free else "Free Pool: `None`")
-        if eta is not None:
+        if eta is not None and rate is not None:
             common += f"  ·  Velocity: `{rate:,.0f}/h` (ETA `~{eta:.0f}m`)"
         elif rate:
             common += f"  ·  Velocity: `{rate:,.0f}/h`"
