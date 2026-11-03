@@ -1,6 +1,15 @@
 model:
-  provider: openrouter
-  default: deepseek/deepseek-v4.1-flash-1017
+  provider: nvidia
+  default: deepseek-ai/deepseek-v4.1-flash
+  base_url: https://integrate.api.nvidia.com/v1
+  api_mode: chat_completions
+
+# Fallback OpenRouter configuration:
+# model:
+#   provider: openrouter
+#   default: deepseek/deepseek-v4.1-flash
+#   base_url: https://openrouter.ai/api/v1
+#   api_mode: chat_completions
 
 mcp_servers:
   viem_web3_harness:
