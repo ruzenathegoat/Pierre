@@ -1,14 +1,23 @@
+# Model utama Pierre. Ganti cepat di VPS dengan: switch_model <openrouter|nvidia>
 model:
-  provider: nvidia
-  default: deepseek-ai/deepseek-v4.1-flash
-  base_url: https://integrate.api.nvidia.com/v1
+  provider: openrouter
+  default: deepseek/deepseek-v4.1-flash
+  base_url: https://openrouter.ai/api/v1
   api_mode: chat_completions
 
+# Dicoba berurutan hanya jika model utama gagal (rate-limit, 5xx, timeout, koneksi).
+# Untuk model baru nanti: tambahkan entri di sini + API key-nya di ~/.hermes/.env.
 fallback_providers:
-  - provider: openrouter
-    model: deepseek/deepseek-v4.1-flash
-    base_url: https://openrouter.ai/api/v1
+  - provider: nvidia
+    model: deepseek-ai/deepseek-v4.1-flash
+    base_url: https://integrate.api.nvidia.com/v1
     api_mode: chat_completions
+
+# Batas tunggu per provider agar provider yang lambat tidak menggantung lama.
+providers:
+  nvidia:
+    request_timeout_seconds: 60
+    stale_timeout_seconds: 60
 
 mcp_servers:
   viem_web3_harness:
