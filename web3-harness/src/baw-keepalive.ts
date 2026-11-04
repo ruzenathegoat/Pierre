@@ -64,18 +64,26 @@ export async function runBawKeepAlive(notifyDiscordOnSuccess = false): Promise<B
       combinedStatus.includes('login');
 
     if (isUnbound) {
+      const diagOut = (statusRes.stdout || statusRes.stderr || 'Disconnected').trim().slice(0, 400);
       await sendDiscordChannelEmbed(
         'positions',
         {
           author: { name: 'RŮŽE HOUSE  ·  SESSION MONITOR' },
           title: 'Binance Agentic Wallet Session Unbound',
-          color: 0xdc3545,
+          color: 0xef4444,
           description:
-            'Heartbeat detected that the `baw` MPC session is disconnected or expired. Run `baw auth signin` on the VPS and scan the QR code from the Binance mobile app.',
+            '> **Action Required:** `baw` MPC session is disconnected or expired.\n> Run `baw auth signin` on the VPS and scan the QR code via the Binance mobile app.',
           fields: [
-            { name: 'DIAGNOSTIC OUTPUT', value: `\`\`\`${statusRes.stdout || statusRes.stderr}\`\`\`` },
+            { name: 'SESSION STATE', value: '`UNBOUND / EXPIRED`', inline: true },
+            { name: 'WALLET ENGINE', value: '`BAW MPC (.ai)`', inline: true },
+            { name: 'HEARTBEAT CADENCE', value: '`6h Interval`', inline: true },
+            {
+              name: 'DIAGNOSTIC TELEMETRY',
+              value: `\`\`\`yaml\n${diagOut}\n\`\`\``,
+              inline: false,
+            },
           ],
-          footer: { text: 'Pierre Execution Desk  ·  BAW Monitor' },
+          footer: { text: 'Pierre Execution Desk  ·  BAW Session Monitor' },
           timestamp,
         },
         'Pierre  |  Session Monitor'
@@ -92,21 +100,26 @@ export async function runBawKeepAlive(notifyDiscordOnSuccess = false): Promise<B
     console.error('[BAW-KeepAlive] Sesi Binance Agentic Wallet (.ai) aktif & ter-refresh.');
 
     if (notifyDiscordOnSuccess) {
+      const statusClean = (statusRes.stdout || 'ACTIVE').trim().slice(0, 400);
       await sendDiscordChannelEmbed(
         'positions',
         {
           author: { name: 'RŮŽE HOUSE  ·  SESSION MONITOR' },
           title: 'Binance Agentic Wallet Session Verified',
-          color: 0x1e1e23,
+          color: 0x10b981,
           description:
-            '6-hour heartbeat refreshed MPC session activity (48h auto-unbind prevention active).',
+            '> 6-hour authenticated MPC heartbeat completed (48h auto-unbind protection active).',
           fields: [
+            { name: 'SESSION STATE', value: '`ACTIVE / VERIFIED`', inline: true },
+            { name: 'WALLET ENGINE', value: '`BAW MPC (.ai)`', inline: true },
+            { name: 'HEARTBEAT CADENCE', value: '`6h Interval`', inline: true },
             {
-              name: 'STATUS',
-              value: `\`\`\`${(statusRes.stdout || 'ACTIVE').slice(0, 500)}\`\`\``,
+              name: 'SESSION TELEMETRY',
+              value: `\`\`\`yaml\n${statusClean}\n\`\`\``,
+              inline: false,
             },
           ],
-          footer: { text: 'Pierre Execution Desk  ·  BAW Monitor' },
+          footer: { text: 'Pierre Execution Desk  ·  BAW Session Monitor' },
           timestamp,
         },
         'Pierre  |  Session Monitor'

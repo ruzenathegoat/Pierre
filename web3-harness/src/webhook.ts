@@ -50,12 +50,19 @@ export interface PositionWebhookPayload {
 }
 
 const ACTION_COLORS: Record<string, number> = {
-  BUY: 0x1e1e23,            // Obsidian Slate
-  MINT: 0xc79f53,           // Champagne Gold
-  CLAIM: 0x10b981,          // Emerald
-  AUTO_SELL: 0xc79f53,      // Champagne Gold
-  EMERGENCY_SELL: 0xdc3545, // Muted Crimson
+  BUY: 0x3b82f6,            // Royal Sapphire
+  MINT: 0xd4af37,           // Champagne Gold
+  CLAIM: 0x10b981,          // Emerald Mint
+  AUTO_SELL: 0xf59e0b,      // Amber Gold
+  EMERGENCY_SELL: 0xef4444, // Crimson Rose
+  SELL: 0xd4af37,           // Champagne Gold
 };
+
+export function shortenHex(hex: string, prefix = 6, suffix = 4): string {
+  const clean = hex.trim();
+  if (clean.length <= prefix + suffix + 2) return clean;
+  return `${clean.slice(0, prefix)}...${clean.slice(-suffix)}`;
+}
 
 export function getNativeCurrencySymbol(chain: string): 'ETH' | 'BNB' {
   const normalized = chain.trim().toLowerCase();
@@ -161,10 +168,10 @@ export async function broadcastPositionUpdate(payload: PositionWebhookPayload): 
   const roiSign = unrealizedRoiPct >= 0 ? '+' : '';
 
   const colorMap: Record<PositionWebhookPayload['event'], number> = {
-    POSITION_OPENED: 0x10b981,     // Emerald
-    HWM_UPDATED: 0x1e1e23,         // Obsidian Slate
-    TRAILING_PEAK_ALERT: 0xc79f53, // Champagne Gold
-    POSITION_CLOSED: 0x2f3136,     // Matte Slate
+    POSITION_OPENED: 0x10b981,     // Emerald Mint
+    HWM_UPDATED: 0x3b82f6,         // Royal Sapphire
+    TRAILING_PEAK_ALERT: 0xf59e0b, // Amber Gold
+    POSITION_CLOSED: 0x64748b,     // Platinum Slate
   };
 
   const labelMap: Record<PositionWebhookPayload['event'], string> = {
@@ -174,12 +181,20 @@ export async function broadcastPositionUpdate(payload: PositionWebhookPayload): 
     POSITION_CLOSED: 'POSITION CLOSED',
   };
 
+  const explorerUrl = payload.txHash ? getExplorerTxUrl(payload.chain, payload.txHash) : undefined;
+  const telemetryLines = [
+    `Contract       :  ${payload.contractAddress}`,
+    ...(payload.tokenId ? [`Token / Mode   :  ${payload.tokenId}`] : []),
+    ...(payload.assetType ? [`Standard       :  ${payload.assetType}`] : []),
+    ...(payload.note ? [`Advisory Note  :  ${payload.note}`] : []),
+  ];
+
   const fields: Array<{ name: string; value: string; inline?: boolean }> = [
-    { name: 'POSITION', value: `\`#${payload.positionId}\``, inline: true },
+    { name: 'POSITION ID', value: `\`#${payload.positionId}\``, inline: true },
     { name: 'STATUS', value: `\`${payload.status}\``, inline: true },
     { name: 'NETWORK', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
     {
-      name: 'ENTRY',
+      name: 'ENTRY BASIS',
       value: `\`${payload.entryPriceEth.toFixed(4)} ${symbol}\``,
       inline: true,
     },
@@ -189,28 +204,27 @@ export async function broadcastPositionUpdate(payload: PositionWebhookPayload): 
       inline: true,
     },
     {
-      name: 'MARK VALUATION',
-      value: `\`${currentPrice.toFixed(4)} ${symbol}\`  (${roiSign}${unrealizedRoiPct.toFixed(2)}%)`,
+      name: 'MARK / ROI',
+      value: `\`${currentPrice.toFixed(4)} ${symbol}\` (${roiSign}${unrealizedRoiPct.toFixed(2)}%)`,
       inline: true,
     },
     {
-      name: 'CONTRACT',
-      value: `\`${payload.contractAddress}\`${payload.tokenId ? `  ·  Token \`${payload.tokenId}\`` : ''}`,
+      name: 'ON-CHAIN TELEMETRY',
+      value: `\`\`\`yaml\n${telemetryLines.join('\n')}\n\`\`\``,
       inline: false,
     },
   ];
 
-  if (payload.note) {
-    fields.push({ name: 'REMARK', value: payload.note, inline: false });
-  }
-
   const embed: Record<string, unknown> = {
     author: { name: `RŮŽE HOUSE  ·  ${labelMap[payload.event]}` },
     title: payload.assetName,
-    url: payload.txHash ? getExplorerTxUrl(payload.chain, payload.txHash) : undefined,
+    url: explorerUrl,
+    description: explorerUrl
+      ? `> Position **#${payload.positionId}** on **${payload.chain.toUpperCase()}**  ·  [View Transaction on Explorer](${explorerUrl})`
+      : `> Position **#${payload.positionId}** on **${payload.chain.toUpperCase()}**`,
     color: colorMap[payload.event],
     fields,
-    footer: { text: 'Pierre Execution Desk  ·  Positions' },
+    footer: { text: 'Pierre Execution Desk  ·  Positions Ledger' },
     timestamp: new Date().toISOString(),
   };
 
@@ -228,6 +242,14 @@ export async function broadcastPnlReport(payload: DiscordBroadcastPayload): Prom
   const roiPct = entry > 0 ? (realizedPnl / entry) * 100 : 0;
   const isProfit = realizedPnl >= 0;
   const sign = isProfit ? '+' : '';
+  const peakHwm = payload.highWaterMarkEth ?? Math.max(entry, payload.priceEth);
+
+  const ledgerBlock = [
+    `Network        :  ${payload.chain.toUpperCase()}`,
+    `Trigger Source :  ${payload.triggerSource}`,
+    `Contract       :  ${payload.contractAddress}`,
+    `Settlement Tx  :  ${shortenHex(payload.txHash, 10, 8)}`,
+  ].join('\n');
 
   const fields: Array<{ name: string; value: string; inline?: boolean }> = [
     {
@@ -237,32 +259,32 @@ export async function broadcastPnlReport(payload: DiscordBroadcastPayload): Prom
     },
     {
       name: 'REALIZED PNL',
-      value: `**${sign}${realizedPnl.toFixed(4)} ${symbol}**`,
+      value: `\`${sign}${realizedPnl.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
       name: 'REALIZED ROI',
-      value: `**${sign}${roiPct.toFixed(2)}%**`,
+      value: `\`${sign}${roiPct.toFixed(2)}%\``,
       inline: true,
     },
     {
-      name: 'ENTRY',
+      name: 'ENTRY BASIS',
       value: `\`${entry.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'SETTLEMENT',
+      name: 'EXIT SETTLEMENT',
       value: `\`${payload.priceEth.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
       name: 'PEAK HWM',
-      value: `\`${(payload.highWaterMarkEth ?? Math.max(entry, payload.priceEth)).toFixed(4)} ${symbol}\``,
+      value: `\`${peakHwm.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'EXECUTION',
-      value: `\`${payload.chain.toUpperCase()}\`  ·  \`${payload.triggerSource}\`  ·  [Explorer](${explorerUrl})`,
+      name: 'SETTLEMENT TELEMETRY',
+      value: `\`\`\`yaml\n${ledgerBlock}\n\`\`\``,
       inline: false,
     },
   ];
@@ -271,7 +293,8 @@ export async function broadcastPnlReport(payload: DiscordBroadcastPayload): Prom
     author: { name: 'RŮŽE HOUSE  ·  REALIZED SETTLEMENT' },
     title: payload.assetName,
     url: explorerUrl,
-    color: isProfit ? 0x10b981 : 0xdc3545,
+    description: `> Closed position on **${payload.chain.toUpperCase()}** with net outcome **${sign}${realizedPnl.toFixed(4)} ${symbol}** (**${sign}${roiPct.toFixed(2)}%**)  ·  [View on Explorer](${explorerUrl})`,
+    color: isProfit ? 0x10b981 : 0xef4444,
     fields,
     footer: { text: 'Pierre Execution Desk  ·  PnL Ledger' },
     timestamp: new Date().toISOString(),
@@ -291,21 +314,23 @@ export async function broadcastToDiscord(payload: DiscordBroadcastPayload): Prom
   const explorerUrl = getExplorerTxUrl(payload.chain, payload.txHash);
   const symbol = getNativeCurrencySymbol(payload.chain);
   const actionUpper = payload.action.toUpperCase();
-  const color = ACTION_COLORS[actionUpper] ?? 0x1e1e23;
+  const color = ACTION_COLORS[actionUpper] ?? 0xd4af37;
+
+  const execTelemetry = [
+    `Contract       :  ${payload.contractAddress}`,
+    ...(payload.tokenId ? [`Token / Mode   :  ${payload.tokenId}`] : []),
+    `Trigger Source :  ${payload.triggerSource}`,
+    `Tx Hash        :  ${shortenHex(payload.txHash, 10, 8)}`,
+  ].join('\n');
 
   // 1. Send Order Execution log to #order-execution
   const execFields: Array<{ name: string; value: string; inline?: boolean }> = [
     { name: 'ACTION', value: `\`${actionUpper}\``, inline: true },
     { name: 'NETWORK', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
-    { name: 'VALUE', value: `\`${payload.priceEth.toFixed(4)} ${symbol}\``, inline: true },
+    { name: 'SETTLEMENT VALUE', value: `\`${payload.priceEth.toFixed(4)} ${symbol}\``, inline: true },
     {
-      name: 'CONTRACT',
-      value: `\`${payload.contractAddress}\`${payload.tokenId ? `  ·  Token \`${payload.tokenId}\`` : ''}`,
-      inline: false,
-    },
-    {
-      name: 'SETTLEMENT',
-      value: `\`${payload.triggerSource}\`  ·  [View on Explorer](${explorerUrl})`,
+      name: 'EXECUTION LEDGER',
+      value: `\`\`\`yaml\n${execTelemetry}\n\`\`\``,
       inline: false,
     },
   ];
@@ -314,6 +339,7 @@ export async function broadcastToDiscord(payload: DiscordBroadcastPayload): Prom
     author: { name: `RŮŽE HOUSE  ·  ORDER ${actionUpper}` },
     title: payload.assetName,
     url: explorerUrl,
+    description: `> Executed **${actionUpper}** on **${payload.chain.toUpperCase()}** for **${payload.priceEth.toFixed(4)} ${symbol}**  ·  [View Receipt on Explorer](${explorerUrl})`,
     color,
     fields: execFields,
     footer: { text: 'Pierre Execution Desk  ·  Order Execution' },

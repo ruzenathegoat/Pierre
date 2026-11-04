@@ -41,8 +41,8 @@ FRESH_REDEDUPE_S = 6 * 3600
 # 1. Wallet II (Binance Agentic Wallet .ai MPC)
 # 2. Wallet I  (Viem EOA Self-Custody)
 WALLET_LABELS = {
-    "0x74624463e902c11ab37c0034eb216a2b4466269f": "Wallet II · Agentic .ai",
-    "0xbad577476432726c45267e2b57602dd4594a936c": "Wallet I · Viem EOA",
+    "0x74624463e902c11ab37c0034eb216a2b4466269f": "Wallet II (Agentic .ai)",
+    "0xbad577476432726c45267e2b57602dd4594a936c": "Wallet I  (Viem EOA)   ",
 }
 
 WALLETS = [w.strip().lower() for w in os.environ.get(
@@ -217,7 +217,7 @@ def eligibility(ca: str, wallets: list[str]) -> list[str]:
     gate = addr_view(ca, ["identity()", "gate()", "registry()", "agentIdRegistry()"])
     lines: list[str] = []
     for w in wallets:
-        label = WALLET_LABELS.get(w.lower(), f"{w[:6]}…{w[-4:]}")
+        label = WALLET_LABELS.get(w.lower(), f"{w[:6]}...{w[-4:]}").ljust(23)
         ok: bool | None = None
         kind = "Agent ID"
         for sig in ("hasAgentId(address)", "hasIdentity(address)"):
@@ -234,11 +234,14 @@ def eligibility(ca: str, wallets: list[str]) -> list[str]:
             if r is not None:
                 ok = int(r, 16) != 0
         if ok is None and gate:
-            kind = "gate NFT"
+            kind = "Gate NFT"
             r = call(gate, "0x" + sel("balanceOf(address)") + pad(w))
             ok = bool(r and int(r, 16) > 0)
-        lines.append(f"`{label}`: {'ELIGIBLE' if ok else 'NOT ELIGIBLE'} ({kind})"
-                     if ok is not None else f"`{label}`: UNVERIFIED")
+        if ok is not None:
+            status_str = "ELIGIBLE    " if ok else "NOT ELIGIBLE"
+            lines.append(f"{label} :  {status_str} ({kind})")
+        else:
+            lines.append(f"{label} :  UNVERIFIED")
     return lines
 
 
@@ -301,25 +304,34 @@ def build_embed(
     signal_label: str,
     sym: str,
     ca: str,
-    common: str,
+    free_kpi: str,
     paid_txt: str,
     price_txt: str,
     age_txt: str,
+    telemetry_line: str,
     elig_lines: list[str],
     color: int,
 ) -> dict:
     wib = datetime.timezone(datetime.timedelta(hours=7))
     ts_wib = datetime.datetime.now(wib).strftime("%Y-%m-%d %H:%M WIB")
+    explorer_url = f"https://bscscan.com/address/{ca}"
+    telemetry_block = (
+        f"Pool Flow      :  {telemetry_line}\n"
+        f"Contract       :  {ca}"
+    )
+    elig_block = "\n".join(elig_lines)
     return {
         "author": {"name": f"RŮŽE HOUSE  ·  AGENT MINT RADAR  ·  {signal_label}"},
         "title": f"{sym}  ·  BSC Identity-Gated Mint",
-        "url": f"https://bscscan.com/address/{ca}",
+        "url": explorer_url,
+        "description": f"> On-chain `.ai` Agent ID mint radar alert for **{sym}** on **BNB Smart Chain**  ·  [View Contract on BscScan]({explorer_url})",
         "color": color,
         "fields": [
-            {"name": "CONTRACT", "value": f"`{ca}`", "inline": False},
-            {"name": "FREE POOL", "value": common.replace("Free Pool: ", ""), "inline": False},
-            {"name": "PAID POOL & PRICE", "value": f"Paid `{paid_txt}`  ·  Price `{price_txt} BNB`  ·  Age `{age_txt}`", "inline": False},
-            {"name": "DUAL-WALLET ELIGIBILITY", "value": "\n".join(elig_lines), "inline": False},
+            {"name": "FREE POOL", "value": f"`{free_kpi}`", "inline": True},
+            {"name": "PAID POOL", "value": f"`{paid_txt}`", "inline": True},
+            {"name": "PRICE & AGE", "value": f"`{price_txt} BNB`  ·  `{age_txt}`", "inline": True},
+            {"name": "POOL TELEMETRY & CONTRACT", "value": f"```yaml\n{telemetry_block}\n```", "inline": False},
+            {"name": "DUAL-WALLET ELIGIBILITY", "value": f"```yaml\n{elig_block}\n```", "inline": False},
         ],
         "footer": {"text": f"Pierre Execution Desk  ·  BSC Mint Radar  ·  {ts_wib}"},
     }
@@ -397,6 +409,13 @@ def main() -> int:
         if eta is not None and eta > 1440:
             eta = None
 
+        free_kpi = f"{free:,}/{max_free:,} ({100 * free / max_free:.0f}%)" if max_free else "None"
+        telemetry_line = f"{left:,} free remaining" if max_free else "No free pool"
+        if eta is not None and rate is not None:
+            telemetry_line += f"  |  Velocity {rate:,.0f}/h (ETA ~{eta:.0f}m)"
+        elif rate:
+            telemetry_line += f"  |  Velocity {rate:,.0f}/h"
+
         common = (f"Free Pool: `{free:,} / {max_free:,}` ({100 * free / max_free:.0f}% claimed  ·  `{left:,}` left)"
                   if max_free else "Free Pool: `None`")
         if eta is not None and rate is not None:
@@ -419,8 +438,8 @@ def main() -> int:
                 + "\n".join(f"Eligibility: {line}" for line in elig_lines)
             )
             embeds.append(build_embed(
-                sig_label, t["sym"], ca, common, paid_txt, price_txt,
-                f"{age / 60:.0f}m", elig_lines, 13082451 if left == 0 else 1096065
+                sig_label, t["sym"], ca, free_kpi, paid_txt, price_txt,
+                f"{age / 60:.0f}m", telemetry_line, elig_lines, 0xD4AF37 if left == 0 else 0x10B981
             ))
             if test_mode and len(embeds) >= 2:
                 break
@@ -438,8 +457,8 @@ def main() -> int:
                 + "\n".join(f"Eligibility: {line}" for line in elig_lines)
             )
             embeds.append(build_embed(
-                "NEW FREE POOL", t["sym"], ca, common, paid_txt, price_txt,
-                f"{age / 60:.0f}m", elig_lines, 1096065
+                "NEW FREE POOL", t["sym"], ca, free_kpi, paid_txt, price_txt,
+                f"{age / 60:.0f}m", telemetry_line, elig_lines, 0x10B981
             ))
             continue
 
@@ -458,8 +477,8 @@ def main() -> int:
                 + "\n".join(f"Eligibility: {line}" for line in elig_lines)
             )
             embeds.append(build_embed(
-                sig_b, t["sym"], ca, common, paid_txt, price_txt,
-                f"{age / 3600:.1f}h", elig_lines, 6582923 if left == 0 else 13082451
+                sig_b, t["sym"], ca, free_kpi, paid_txt, price_txt,
+                f"{age / 3600:.1f}h", telemetry_line, elig_lines, 0x64748B if left == 0 else 0xF59E0B
             ))
 
         # ---- filter C: paid velocity (sellout closes the free lane)
@@ -482,8 +501,8 @@ def main() -> int:
                 f"{common}"
             )
             embeds.append(build_embed(
-                f"HIGH PAID VELOCITY (+{delta:,}/1H)", t["sym"], ca, common, paid_txt, price_txt,
-                f"{age / 60:.0f}m", elig_lines, 13082451
+                f"HIGH PAID VELOCITY (+{delta:,}/1H)", t["sym"], ca, free_kpi, paid_txt, price_txt,
+                f"{age / 60:.0f}m", f"Paid Surge +{delta:,}/1h  |  {telemetry_line}", elig_lines, 0xD4AF37
             ))
 
     if len(alerts) > 4000:

@@ -44,6 +44,31 @@ jobs:
                 fs.writeFileSync("known_patterns.json", JSON.stringify(repo, null, 2));
               '
             fi
+            mkdir -p ~/.hermes/scripts
+            cp -f hermes-templates/scripts/*.py ~/.hermes/scripts/ 2>/dev/null || true
+            cp -f hermes-templates/scripts/*.sh ~/.hermes/scripts/ 2>/dev/null || true
+            chmod +x ~/.hermes/scripts/*.py ~/.hermes/scripts/*.sh 2>/dev/null || true
+            if [ -f ~/.hermes/cron/jobs.json ] && [ -f hermes-templates/cron-jobs.json ]; then
+              node -e '
+                const fs = require("fs");
+                const os = require("os");
+                const livePath = os.homedir() + "/.hermes/cron/jobs.json";
+                const live = JSON.parse(fs.readFileSync(livePath, "utf8"));
+                const tmpl = JSON.parse(fs.readFileSync("hermes-templates/cron-jobs.json", "utf8"));
+                const tmplMap = new Map((tmpl.jobs || []).map(j => [j.id, j]));
+                if (Array.isArray(live.jobs)) {
+                  for (const job of live.jobs) {
+                    const t = tmplMap.get(job.id);
+                    if (t) {
+                      job.prompt = t.prompt;
+                      if (t.script !== undefined) job.script = t.script;
+                      if (t.no_agent !== undefined) job.no_agent = t.no_agent;
+                    }
+                  }
+                  fs.writeFileSync(livePath, JSON.stringify(live, null, 2));
+                }
+              '
+            fi
             npm ci --omit=dev
             pm2 restart price-watcher || pm2 start ecosystem.config.cjs --only price-watcher
             pm2 restart baw-keepalive || pm2 start ecosystem.config.cjs --only baw-keepalive

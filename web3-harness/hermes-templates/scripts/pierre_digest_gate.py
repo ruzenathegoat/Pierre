@@ -166,13 +166,14 @@ def fetch_dexscreener(contract_address: str) -> dict | None:
 
 
 def build_position_field(row: dict) -> dict:
+    pos_id = row.get("id", "?")
     chain = str(row["chain"] or "bsc").upper()
     native_sym = "BNB" if chain == "BSC" else "ETH"
     ca = str(row["contract_address"] or "").lower()
     name = str(row["asset_name"] or "Unknown Asset")
     entry = float(row["entry_price_eth"] or 0.0)
     hwm = float(row["high_water_mark_eth"] or entry)
-    wallet_tag = "Wallet II · Agentic .ai" if row["token_id"] == "BAW_MPC" else "Wallet I · Viem EOA"
+    wallet_tag = "Wallet II (Agentic .ai)" if row["token_id"] == "BAW_MPC" else "Wallet I (Viem EOA)"
 
     pair = fetch_dexscreener(ca)
     if pair:
@@ -186,13 +187,16 @@ def build_position_field(row: dict) -> dict:
         roi_pct = ((price_native - entry) / entry * 100.0) if (entry > 0 and price_native > 0) else 0.0
         drop_pct = ((hwm - price_native) / hwm * 100.0) if (hwm > 0 and price_native > 0) else 0.0
         stance = "SELL CANDIDATE" if (roi_pct >= 30 and drop_pct >= 5) else ("WATCH" if drop_pct >= 5 else "HOLD")
+        roi_sign = "+" if roi_pct >= 0 else ""
+        block = (
+            f"Wallet         :  {wallet_tag}\n"
+            f"Entry / Mark   :  {entry:g} {native_sym}  ->  ${price_usd:g} ({roi_sign}{roi_pct:.1f}% ROI)\n"
+            f"Liquidity / 1h :  ${liq_usd:,.0f}  |  {buys} Buy / {sells} Sell ({vel})\n"
+            f"Contract       :  {ca}"
+        )
         return {
-            "name": f"{name}  ·  {chain}  ·  [{stance}]",
-            "value": (
-                f"Wallet `{wallet_tag}`  ·  Entry `{entry:g} {native_sym}`  ·  Mark `${price_usd:g}`\n"
-                f"Liquidity `${liq_usd:,.0f}`  ·  1h Flow `{buys}B / {sells}S` (`{vel}`)\n"
-                f"Contract `{ca}`"
-            ),
+            "name": f"#{pos_id}  ·  {name}  [{chain}]  —  {stance}",
+            "value": f"```yaml\n{block}\n```",
             "inline": False,
         }
 
@@ -208,23 +212,27 @@ def build_position_field(row: dict) -> dict:
         paid_str = f"{sold:,}/{max_paid:,}" if (sold is not None and max_paid) else (f"{sold:,}" if sold is not None else "n/a")
         free_str = f"{free_claimed:,}/{max_free:,}" if (free_claimed is not None and max_free) else "n/a"
         stage_str = "Pool Open" if launched else "Pre-Launch Minting"
+        block = (
+            f"Wallet         :  {wallet_tag}\n"
+            f"Cost Basis     :  {entry:g} {native_sym}  |  Stage: {stage_str}\n"
+            f"Pool Progress  :  Paid {paid_str}  |  Free {free_str}\n"
+            f"Contract       :  {ca}"
+        )
         return {
-            "name": f"{name}  ·  {chain}  ·  [HOLD · {stage_str.upper()}]",
-            "value": (
-                f"Wallet `{wallet_tag}`  ·  Cost Basis `{entry:g} {native_sym}`\n"
-                f"Stage `{stage_str}`  ·  Paid Pool `{paid_str}`  ·  Free Pool `{free_str}`\n"
-                f"Contract `{ca}`"
-            ),
+            "name": f"#{pos_id}  ·  {name}  [{chain}]  —  HOLD ({stage_str.upper()})",
+            "value": f"```yaml\n{block}\n```",
             "inline": False,
         }
 
+    block = (
+        f"Wallet         :  {wallet_tag}\n"
+        f"Cost / HWM     :  {entry:g} {native_sym}  |  HWM {hwm:g} {native_sym}\n"
+        f"Stage          :  Awaiting DEX Graduation / Indexing\n"
+        f"Contract       :  {ca}"
+    )
     return {
-        "name": f"{name}  ·  {chain}  ·  [HOLD · MONITORED]",
-        "value": (
-            f"Wallet `{wallet_tag}`  ·  Cost Basis `{entry:g} {native_sym}`  ·  HWM `{hwm:g} {native_sym}`\n"
-            f"Stage `Awaiting DEX Graduation / Orderbook Indexing`\n"
-            f"Contract `{ca}`"
-        ),
+        "name": f"#{pos_id}  ·  {name}  [{chain}]  —  HOLD (MONITORED)",
+        "value": f"```yaml\n{block}\n```",
         "inline": False,
     }
 
@@ -254,7 +262,15 @@ def main() -> int:
         "entry_price_eth", "high_water_mark_eth", "last_alerted_at", "updated_at",
     ]
     positions = [dict(zip(cols, r)) for r in rows]
-    fields = [build_position_field(p) for p in positions[:10]]
+    baw_count = sum(1 for p in positions if p.get("token_id") == "BAW_MPC")
+    eoa_count = len(positions) - baw_count
+
+    header_fields = [
+        {"name": "ACTIVE POSITIONS", "value": f"`{len(positions)} Open`", "inline": True},
+        {"name": "WALLET SPLIT", "value": f"`{eoa_count} EOA  ·  {baw_count} BAW`", "inline": True},
+        {"name": "WATCHER CADENCE", "value": "`20s HWM  ·  15m Digest`", "inline": True},
+    ]
+    pos_fields = [build_position_field(p) for p in positions[:8]]
 
     wib = datetime.timezone(datetime.timedelta(hours=7))
     ts_wib = datetime.datetime.now(wib).strftime("%Y-%m-%d %H:%M WIB")
@@ -264,10 +280,11 @@ def main() -> int:
         "embeds": [
             {
                 "author": {"name": "RŮŽE HOUSE  ·  PORTFOLIO ADVISORY"},
-                "title": f"Position Risk & Orderbook Digest  ·  {len(positions)} Open",
-                "color": 13082451,
-                "fields": fields,
-                "footer": {"text": f"Pierre Execution Desk  ·  15m Digest  ·  {ts_wib}"},
+                "title": "Position Risk & Orderbook Digest",
+                "description": f"> Live orderbook depth and on-chain pre-launch telemetry for **{len(positions)}** open position(s).",
+                "color": 0xD4AF37,
+                "fields": header_fields + pos_fields,
+                "footer": {"text": f"Pierre Execution Desk  ·  15m Advisory Digest  ·  {ts_wib}"},
             }
         ],
     }

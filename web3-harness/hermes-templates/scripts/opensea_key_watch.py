@@ -51,7 +51,13 @@ def read_webhook_url() -> str:
     return ""
 
 
-def post_watchdog_embed(title: str, status_tag: str, fields: list[dict], color: int = 1973795) -> int:
+def post_watchdog_embed(
+    title: str,
+    status_tag: str,
+    description: str,
+    fields: list[dict],
+    color: int = 0xD4AF37,
+) -> int:
     url = read_webhook_url()
     if not url:
         return 0
@@ -63,6 +69,7 @@ def post_watchdog_embed(title: str, status_tag: str, fields: list[dict], color: 
             {
                 "author": {"name": f"RŮŽE HOUSE  ·  OPENSEA WATCHDOG  ·  {status_tag}"},
                 "title": title,
+                "description": description,
                 "color": color,
                 "fields": fields,
                 "footer": {"text": f"Pierre Execution Desk  ·  API Key Watchdog  ·  {ts_wib}"},
@@ -212,31 +219,43 @@ def main() -> int:
             if st.get("alerted_date") != date.today().isoformat():
                 state_write(alerted_date=date.today().isoformat())
                 msg = f"**SYSTEM WATCHDOG  ·  OPENSEA FEED**\nStatus: `Connection Check Failed` ({str(body)[:120]})  ·  Action: `No Change`"
+                detail_block = (
+                    f"Error Detail   :  {str(body)[:140]}\n"
+                    f"Action Taken   :  No Rotation (Retrying Next Tick)"
+                )
                 post_watchdog_embed(
                     "OpenSea v2 Feed Connection Warning",
                     "TRANSIENT WARNING",
+                    "> Transient network or Cloudflare error encountered while probing OpenSea API v2.",
                     [
-                        {"name": "STATUS", "value": "`Connection Check Failed`", "inline": True},
-                        {"name": "FINGERPRINT", "value": f"`{fp or 'n/a'}`", "inline": True},
-                        {"name": "DETAIL", "value": f"`{str(body)[:160]}`", "inline": False},
+                        {"name": "FEED STATUS", "value": "`CONNECTION FAILED`", "inline": True},
+                        {"name": "KEY FINGERPRINT", "value": f"`{fp or 'n/a'}`", "inline": True},
+                        {"name": "HARNESS MODE", "value": "`Hot-Reload (.env)`", "inline": True},
+                        {"name": "DIAGNOSTIC LOG", "value": f"```yaml\n{detail_block}\n```", "inline": False},
                     ],
-                    13082451,
+                    0xF59E0B,
                 )
                 print(msg)
             return 0
 
     if args.send_status:
         hrs = f"{round((expires - now).total_seconds() / 3600, 1)}h" if expires else "Active (HTTP 200)"
+        exp_str = st.get("expires_at") if expires else "Auto-Managed (6d Window)"
+        detail_block = (
+            f"Tracked Expiry :  {exp_str}\n"
+            f"Config Path    :  ~/.hermes/web3-harness/.env (Hot-Reload)"
+        )
         post_watchdog_embed(
             "OpenSea API v2 Key Telemetry",
             "ACTIVE",
+            "> OpenSea API v2 orderbook & Seaport fulfillment feed is authenticated and healthy.",
             [
-                {"name": "STATUS", "value": f"`HTTP {status} (Healthy)`", "inline": True},
-                {"name": "FINGERPRINT", "value": f"`{fp}`", "inline": True},
+                {"name": "FEED STATUS", "value": f"`HTTP {status} HEALTHY`", "inline": True},
+                {"name": "KEY FINGERPRINT", "value": f"`{fp}`", "inline": True},
                 {"name": "WINDOW REMAINING", "value": f"`{hrs}`", "inline": True},
-                {"name": "HARNESS MODE", "value": "`Hot-Reload Active (.env)`", "inline": False},
+                {"name": "KEY TELEMETRY", "value": f"```yaml\n{detail_block}\n```", "inline": False},
             ],
-            1096065,
+            0x10B981,
         )
         return 0
 
@@ -257,15 +276,22 @@ def main() -> int:
         new_fp = fingerprint(new_key)
         state_write(fingerprint=new_fp, expires_at=new_exp, alerted_date=None,
                     rotated_at=now.isoformat())
+        rot_block = (
+            f"Rotation Cause :  {why}\n"
+            f"New Expiry     :  {new_exp}\n"
+            f"Reload Status  :  Hot-Reload Active (.env)"
+        )
         post_watchdog_embed(
             "OpenSea API v2 Key Auto-Rotated",
             "KEY ROTATED",
+            "> Provisioned a fresh 7-day free-tier OpenSea API v2 key and hot-reloaded `.env`.",
             [
-                {"name": "REASON", "value": f"`{why}`", "inline": True},
+                {"name": "ROTATION STATUS", "value": "`AUTO-ROTATED`", "inline": True},
                 {"name": "NEW FINGERPRINT", "value": f"`{new_fp}`", "inline": True},
-                {"name": "EXPIRES AT", "value": f"`{new_exp}`", "inline": False},
+                {"name": "VALIDITY WINDOW", "value": "`7 Days`", "inline": True},
+                {"name": "ROTATION LEDGER", "value": f"```yaml\n{rot_block}\n```", "inline": False},
             ],
-            1096065,
+            0x10B981,
         )
         print(f"**SYSTEM WATCHDOG  ·  OPENSEA KEY ROTATED**\nReason: `{why}`  ·  New Expiry: `{new_exp}`  ·  Reload: `Hot-Reload Active (.env)`")
         return 0
@@ -285,15 +311,22 @@ def main() -> int:
     if st.get("alerted_date") == today:
         return 0
     state_write(alerted_date=today)
+    err_block = (
+        f"Failure Reason :  {why}\n"
+        f"Provision HTTP :  HTTP {nstatus}\n"
+        f"Remediation    :  Update OPENSEA_API_KEY in ~/.hermes/web3-harness/.env"
+    )
     post_watchdog_embed(
         "OpenSea API v2 Rotation Required",
         "ACTION REQUIRED",
+        "> Auto-provisioning a new OpenSea API key was rate-limited or blocked. Manual key update required.",
         [
-            {"name": "REASON", "value": f"`{why}`", "inline": True},
-            {"name": "ROTATION HTTP", "value": f"`HTTP {nstatus}`", "inline": True},
-            {"name": "ACTION", "value": "Generate a new key at `opensea.io/settings/developer` and update `OPENSEA_API_KEY` in `~/.hermes/web3-harness/.env`.", "inline": False},
+            {"name": "FEED STATUS", "value": "`ACTION REQUIRED`", "inline": True},
+            {"name": "PROVISION HTTP", "value": f"`HTTP {nstatus}`", "inline": True},
+            {"name": "KEY FINGERPRINT", "value": f"`{fp or 'n/a'}`", "inline": True},
+            {"name": "DIAGNOSTIC & REMEDIATION", "value": f"```yaml\n{err_block}\n```", "inline": False},
         ],
-        14298676,
+        0xEF4444,
     )
     print(f"**SYSTEM WATCHDOG  ·  OPENSEA ROTATION ERROR**\nReason: `{why}`  ·  HTTP `{nstatus}`  ·  `{str(nbody)[:180]}`")
     return 0
