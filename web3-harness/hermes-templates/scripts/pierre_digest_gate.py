@@ -165,6 +165,20 @@ def fetch_dexscreener(contract_address: str) -> dict | None:
         return None
 
 
+BSC_LOGO_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png"
+BASE_LOGO_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png"
+ETH_LOGO_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
+
+
+def get_chain_logo_url(chain: str) -> str:
+    norm = chain.strip().lower()
+    if norm == "base":
+        return BASE_LOGO_URL
+    if norm in ("bsc", "bnb"):
+        return BSC_LOGO_URL
+    return ETH_LOGO_URL
+
+
 def build_position_field(row: dict) -> dict:
     pos_id = row.get("id", "?")
     chain = str(row["chain"] or "bsc").upper()
@@ -174,6 +188,10 @@ def build_position_field(row: dict) -> dict:
     entry = float(row["entry_price_eth"] or 0.0)
     hwm = float(row["high_water_mark_eth"] or entry)
     wallet_tag = "Wallet II (Agentic .ai)" if row["token_id"] == "BAW_MPC" else "Wallet I (Viem EOA)"
+    dex_slug = "bsc" if chain == "BSC" else chain.lower()
+    dex_url = f"https://dexscreener.com/{dex_slug}/{ca}"
+    scan_url = f"https://bscscan.com/address/{ca}" if chain == "BSC" else f"https://basescan.org/address/{ca}"
+    links = f"[DexScreener ↗]({dex_url})  •  [Explorer ↗]({scan_url})"
 
     pair = fetch_dexscreener(ca)
     if pair:
@@ -187,6 +205,7 @@ def build_position_field(row: dict) -> dict:
         roi_pct = ((price_native - entry) / entry * 100.0) if (entry > 0 and price_native > 0) else 0.0
         drop_pct = ((hwm - price_native) / hwm * 100.0) if (hwm > 0 and price_native > 0) else 0.0
         stance = "SELL CANDIDATE" if (roi_pct >= 30 and drop_pct >= 5) else ("WATCH" if drop_pct >= 5 else "HOLD")
+        stance_icon = "🟢" if stance == "HOLD" else ("🟡" if stance == "WATCH" else "🚨")
         roi_sign = "+" if roi_pct >= 0 else ""
         block = (
             f"Wallet         :  {wallet_tag}\n"
@@ -195,8 +214,8 @@ def build_position_field(row: dict) -> dict:
             f"Contract       :  {ca}"
         )
         return {
-            "name": f"#{pos_id}  ·  {name}  [{chain}]  —  {stance}",
-            "value": f"```yaml\n{block}\n```",
+            "name": f"{stance_icon} #{pos_id}  ·  {name}  [{chain}]  —  {stance}",
+            "value": f"```yaml\n{block}\n```\n> 🔗 {links}",
             "inline": False,
         }
 
@@ -219,8 +238,8 @@ def build_position_field(row: dict) -> dict:
             f"Contract       :  {ca}"
         )
         return {
-            "name": f"#{pos_id}  ·  {name}  [{chain}]  —  HOLD ({stage_str.upper()})",
-            "value": f"```yaml\n{block}\n```",
+            "name": f"🟢 #{pos_id}  ·  {name}  [{chain}]  —  HOLD ({stage_str.upper()})",
+            "value": f"```yaml\n{block}\n```\n> 🔗 {links}",
             "inline": False,
         }
 
@@ -231,8 +250,8 @@ def build_position_field(row: dict) -> dict:
         f"Contract       :  {ca}"
     )
     return {
-        "name": f"#{pos_id}  ·  {name}  [{chain}]  —  HOLD (MONITORED)",
-        "value": f"```yaml\n{block}\n```",
+        "name": f"🛡️ #{pos_id}  ·  {name}  [{chain}]  —  HOLD (MONITORED)",
+        "value": f"```yaml\n{block}\n```\n> 🔗 {links}",
         "inline": False,
     }
 
@@ -265,10 +284,13 @@ def main() -> int:
     baw_count = sum(1 for p in positions if p.get("token_id") == "BAW_MPC")
     eoa_count = len(positions) - baw_count
 
+    primary_chain = str(positions[0]["chain"] or "bsc")
+    chain_logo = get_chain_logo_url(primary_chain)
+
     header_fields = [
-        {"name": "ACTIVE POSITIONS", "value": f"`{len(positions)} Open`", "inline": True},
-        {"name": "WALLET SPLIT", "value": f"`{eoa_count} EOA  ·  {baw_count} BAW`", "inline": True},
-        {"name": "WATCHER CADENCE", "value": "`20s HWM  ·  15m Digest`", "inline": True},
+        {"name": "💼 ACTIVE POSITIONS", "value": f"`{len(positions)} Open`", "inline": True},
+        {"name": "💳 WALLET SPLIT", "value": f"`{eoa_count} EOA  ·  {baw_count} BAW`", "inline": True},
+        {"name": "⏱️ CADENCE", "value": "`20s HWM  ·  15m Digest`", "inline": True},
     ]
     pos_fields = [build_position_field(p) for p in positions[:8]]
 
@@ -279,12 +301,19 @@ def main() -> int:
         "username": "Pierre  |  Advisory",
         "embeds": [
             {
-                "author": {"name": "RŮŽE HOUSE  ·  PORTFOLIO ADVISORY"},
-                "title": "Position Risk & Orderbook Digest",
-                "description": f"> Live orderbook depth and on-chain pre-launch telemetry for **{len(positions)}** open position(s).",
+                "author": {
+                    "name": "RŮŽE HOUSE  ·  PORTFOLIO ADVISORY",
+                    "icon_url": chain_logo,
+                },
+                "title": "🔭 Position Risk & Orderbook Digest",
+                "thumbnail": {"url": chain_logo},
+                "description": f"> Live orderbook depth and on-chain telemetry for **{len(positions)}** open position(s).",
                 "color": 0xD4AF37,
                 "fields": header_fields + pos_fields,
-                "footer": {"text": f"Pierre Execution Desk  ·  15m Advisory Digest  ·  {ts_wib}"},
+                "footer": {
+                    "text": f"Pierre Execution Desk  ·  15m Advisory Digest  ·  {ts_wib}",
+                    "icon_url": chain_logo,
+                },
             }
         ],
     }

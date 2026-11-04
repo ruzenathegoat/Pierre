@@ -63,27 +63,38 @@ export async function runBawKeepAlive(notifyDiscordOnSuccess = false): Promise<B
       combinedStatus.includes('expired') ||
       combinedStatus.includes('login');
 
+    const bscLogoUrl =
+      'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png';
+
     if (isUnbound) {
       const diagOut = (statusRes.stdout || statusRes.stderr || 'Disconnected').trim().slice(0, 400);
       await sendDiscordChannelEmbed(
         'positions',
         {
-          author: { name: 'RŮŽE HOUSE  ·  SESSION MONITOR' },
-          title: 'Binance Agentic Wallet Session Unbound',
+          author: {
+            name: 'RŮŽE HOUSE  ·  SESSION MONITOR',
+            icon_url: bscLogoUrl,
+          },
+          title: '🚨 Binance Agentic Wallet Session Unbound',
+          url: 'https://bscscan.com',
+          thumbnail: { url: bscLogoUrl },
           color: 0xef4444,
           description:
             '> **Action Required:** `baw` MPC session is disconnected or expired.\n> Run `baw auth signin` on the VPS and scan the QR code via the Binance mobile app.',
           fields: [
-            { name: 'SESSION STATE', value: '`UNBOUND / EXPIRED`', inline: true },
-            { name: 'WALLET ENGINE', value: '`BAW MPC (.ai)`', inline: true },
-            { name: 'HEARTBEAT CADENCE', value: '`6h Interval`', inline: true },
+            { name: '🔴 SESSION STATE', value: '`UNBOUND / EXPIRED`', inline: true },
+            { name: '🤖 WALLET ENGINE', value: '`BAW MPC (.ai)`', inline: true },
+            { name: '⏱️ CADENCE', value: '`6h Interval`', inline: true },
             {
-              name: 'DIAGNOSTIC TELEMETRY',
+              name: '📋 DIAGNOSTIC TELEMETRY',
               value: `\`\`\`yaml\n${diagOut}\n\`\`\``,
               inline: false,
             },
           ],
-          footer: { text: 'Pierre Execution Desk  ·  BAW Session Monitor' },
+          footer: {
+            text: 'Pierre Execution Desk  ·  BAW Session Monitor',
+            icon_url: bscLogoUrl,
+          },
           timestamp,
         },
         'Pierre  |  Session Monitor'
@@ -104,22 +115,30 @@ export async function runBawKeepAlive(notifyDiscordOnSuccess = false): Promise<B
       await sendDiscordChannelEmbed(
         'positions',
         {
-          author: { name: 'RŮŽE HOUSE  ·  SESSION MONITOR' },
-          title: 'Binance Agentic Wallet Session Verified',
+          author: {
+            name: 'RŮŽE HOUSE  ·  SESSION MONITOR',
+            icon_url: bscLogoUrl,
+          },
+          title: '🛡️ Binance Agentic Wallet Session Verified',
+          url: 'https://bscscan.com',
+          thumbnail: { url: bscLogoUrl },
           color: 0x10b981,
           description:
-            '> 6-hour authenticated MPC heartbeat completed (48h auto-unbind protection active).',
+            '> 🤖 6-hour authenticated MPC heartbeat completed (48h auto-unbind protection active).',
           fields: [
-            { name: 'SESSION STATE', value: '`ACTIVE / VERIFIED`', inline: true },
-            { name: 'WALLET ENGINE', value: '`BAW MPC (.ai)`', inline: true },
-            { name: 'HEARTBEAT CADENCE', value: '`6h Interval`', inline: true },
+            { name: '🟢 SESSION STATE', value: '`ACTIVE / VERIFIED`', inline: true },
+            { name: '🤖 WALLET ENGINE', value: '`BAW MPC (.ai)`', inline: true },
+            { name: '⏱️ CADENCE', value: '`6h Interval`', inline: true },
             {
-              name: 'SESSION TELEMETRY',
+              name: '📋 SESSION TELEMETRY',
               value: `\`\`\`yaml\n${statusClean}\n\`\`\``,
               inline: false,
             },
           ],
-          footer: { text: 'Pierre Execution Desk  ·  BAW Session Monitor' },
+          footer: {
+            text: 'Pierre Execution Desk  ·  BAW Session Monitor',
+            icon_url: bscLogoUrl,
+          },
           timestamp,
         },
         'Pierre  |  Session Monitor'

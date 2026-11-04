@@ -300,6 +300,9 @@ def shares_minted_since(ca: str, blocks_back: int) -> int:
     return total
 
 
+BSC_LOGO_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png"
+
+
 def build_embed(
     signal_label: str,
     sym: str,
@@ -321,19 +324,26 @@ def build_embed(
     )
     elig_block = "\n".join(elig_lines)
     return {
-        "author": {"name": f"RŮŽE HOUSE  ·  AGENT MINT RADAR  ·  {signal_label}"},
-        "title": f"{sym}  ·  BSC Identity-Gated Mint",
+        "author": {
+            "name": f"RŮŽE HOUSE  ·  AGENT MINT RADAR  ·  {signal_label}",
+            "icon_url": BSC_LOGO_URL,
+        },
+        "title": f"💎 {sym}  ·  BSC Identity-Gated Mint",
         "url": explorer_url,
-        "description": f"> On-chain `.ai` Agent ID mint radar alert for **{sym}** on **BNB Smart Chain**  ·  [View Contract on BscScan]({explorer_url})",
+        "thumbnail": {"url": BSC_LOGO_URL},
+        "description": f"> 🛰️ On-chain `.ai` Agent ID radar signal: **{signal_label}** on **BNB Chain**  ·  [View Contract on BscScan ↗]({explorer_url})",
         "color": color,
         "fields": [
-            {"name": "FREE POOL", "value": f"`{free_kpi}`", "inline": True},
-            {"name": "PAID POOL", "value": f"`{paid_txt}`", "inline": True},
-            {"name": "PRICE & AGE", "value": f"`{price_txt} BNB`  ·  `{age_txt}`", "inline": True},
-            {"name": "POOL TELEMETRY & CONTRACT", "value": f"```yaml\n{telemetry_block}\n```", "inline": False},
-            {"name": "DUAL-WALLET ELIGIBILITY", "value": f"```yaml\n{elig_block}\n```", "inline": False},
+            {"name": "🎁 FREE POOL", "value": f"`{free_kpi}`", "inline": True},
+            {"name": "💰 PAID POOL", "value": f"`{paid_txt}`", "inline": True},
+            {"name": "🏷️ PRICE & AGE", "value": f"`{price_txt} BNB`  ·  `{age_txt}`", "inline": True},
+            {"name": "📋 POOL TELEMETRY & CONTRACT", "value": f"```yaml\n{telemetry_block}\n```\n> 🔗 [View on BscScan ↗]({explorer_url})", "inline": False},
+            {"name": "🛡️ DUAL-WALLET ELIGIBILITY", "value": f"```yaml\n{elig_block}\n```", "inline": False},
         ],
-        "footer": {"text": f"Pierre Execution Desk  ·  BSC Mint Radar  ·  {ts_wib}"},
+        "footer": {
+            "text": f"Pierre Execution Desk  ·  BSC Mint Radar  ·  {ts_wib}",
+            "icon_url": BSC_LOGO_URL,
+        },
     }
 
 

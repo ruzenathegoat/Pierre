@@ -58,6 +58,15 @@ const ACTION_COLORS: Record<string, number> = {
   SELL: 0xd4af37,           // Champagne Gold
 };
 
+const ACTION_ICONS: Record<string, string> = {
+  BUY: '🛒',
+  MINT: '💎',
+  CLAIM: '🎁',
+  AUTO_SELL: '⚡',
+  EMERGENCY_SELL: '🚨',
+  SELL: '📤',
+};
+
 export function shortenHex(hex: string, prefix = 6, suffix = 4): string {
   const clean = hex.trim();
   if (clean.length <= prefix + suffix + 2) return clean;
@@ -72,6 +81,20 @@ export function getNativeCurrencySymbol(chain: string): 'ETH' | 'BNB' {
   return 'ETH';
 }
 
+export function getChainIconUrl(chain: string): string {
+  const normalized = chain.trim().toLowerCase();
+  if (normalized === 'base') {
+    return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png';
+  }
+  if (normalized === 'bsc' || normalized === 'bnb') {
+    return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png';
+  }
+  if (normalized === 'robinhood' || normalized === 'rh') {
+    return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/arbitrum/info/logo.png';
+  }
+  return 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png';
+}
+
 export function getExplorerTxUrl(chain: string, txHash: string): string {
   const normalized = chain.trim().toLowerCase();
   if (normalized === 'base') {
@@ -84,6 +107,26 @@ export function getExplorerTxUrl(chain: string, txHash: string): string {
     return `https://robinhoodchain.blockscout.com/tx/${txHash}`;
   }
   return `https://etherscan.io/tx/${txHash}`;
+}
+
+export function getExplorerAddressUrl(chain: string, address: string): string {
+  const normalized = chain.trim().toLowerCase();
+  if (normalized === 'base') {
+    return `https://basescan.org/address/${address}`;
+  }
+  if (normalized === 'bsc' || normalized === 'bnb') {
+    return `https://bscscan.com/address/${address}`;
+  }
+  if (normalized === 'robinhood' || normalized === 'rh') {
+    return `https://robinhoodchain.blockscout.com/address/${address}`;
+  }
+  return `https://etherscan.io/address/${address}`;
+}
+
+export function getDexScreenerTokenUrl(chain: string, address: string): string {
+  const normalized = chain.trim().toLowerCase();
+  const chainSlug = normalized === 'bsc' || normalized === 'bnb' ? 'bsc' : normalized;
+  return `https://dexscreener.com/${chainSlug}/${address}`;
 }
 
 /**
@@ -160,6 +203,7 @@ export async function sendDiscordChannelEmbed(
  */
 export async function broadcastPositionUpdate(payload: PositionWebhookPayload): Promise<boolean> {
   const symbol = getNativeCurrencySymbol(payload.chain);
+  const chainIcon = getChainIconUrl(payload.chain);
   const currentPrice = payload.currentBidEth ?? payload.highWaterMarkEth;
   const unrealizedRoiPct =
     payload.entryPriceEth > 0
@@ -174,14 +218,18 @@ export async function broadcastPositionUpdate(payload: PositionWebhookPayload): 
     POSITION_CLOSED: 0x64748b,     // Platinum Slate
   };
 
-  const labelMap: Record<PositionWebhookPayload['event'], string> = {
-    POSITION_OPENED: 'POSITION OPENED',
-    HWM_UPDATED: 'HIGH-WATER MARK UPDATED',
-    TRAILING_PEAK_ALERT: 'TRAILING PEAK ALERT',
-    POSITION_CLOSED: 'POSITION CLOSED',
+  const eventBadgeMap: Record<PositionWebhookPayload['event'], { label: string; icon: string }> = {
+    POSITION_OPENED: { label: 'POSITION OPENED', icon: '📥' },
+    HWM_UPDATED: { label: 'HIGH-WATER MARK UPDATED', icon: '🏔️' },
+    TRAILING_PEAK_ALERT: { label: 'TRAILING PEAK ALERT', icon: '⚠️' },
+    POSITION_CLOSED: { label: 'POSITION CLOSED', icon: '📤' },
   };
 
+  const badge = eventBadgeMap[payload.event] ?? { label: payload.event, icon: '🎯' };
   const explorerUrl = payload.txHash ? getExplorerTxUrl(payload.chain, payload.txHash) : undefined;
+  const contractUrl = getExplorerAddressUrl(payload.chain, payload.contractAddress);
+  const dexUrl = getDexScreenerTokenUrl(payload.chain, payload.contractAddress);
+
   const telemetryLines = [
     `Contract       :  ${payload.contractAddress}`,
     ...(payload.tokenId ? [`Token / Mode   :  ${payload.tokenId}`] : []),
@@ -189,42 +237,55 @@ export async function broadcastPositionUpdate(payload: PositionWebhookPayload): 
     ...(payload.note ? [`Advisory Note  :  ${payload.note}`] : []),
   ];
 
+  const quickLinks = [
+    ...(explorerUrl ? [`[Explorer ↗](${explorerUrl})`] : []),
+    `[Contract ↗](${contractUrl})`,
+    `[DexScreener ↗](${dexUrl})`,
+  ].join('  •  ');
+
   const fields: Array<{ name: string; value: string; inline?: boolean }> = [
-    { name: 'POSITION ID', value: `\`#${payload.positionId}\``, inline: true },
-    { name: 'STATUS', value: `\`${payload.status}\``, inline: true },
-    { name: 'NETWORK', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
+    { name: '🏷️ POSITION ID', value: `\`#${payload.positionId}\``, inline: true },
+    { name: '🟢 STATUS', value: `\`${payload.status}\``, inline: true },
+    { name: '🌐 NETWORK', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
     {
-      name: 'ENTRY BASIS',
+      name: '📥 ENTRY BASIS',
       value: `\`${payload.entryPriceEth.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'PEAK HWM',
+      name: '🏔️ PEAK HWM',
       value: `\`${payload.highWaterMarkEth.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'MARK / ROI',
+      name: '📊 MARK / ROI',
       value: `\`${currentPrice.toFixed(4)} ${symbol}\` (${roiSign}${unrealizedRoiPct.toFixed(2)}%)`,
       inline: true,
     },
     {
-      name: 'ON-CHAIN TELEMETRY',
-      value: `\`\`\`yaml\n${telemetryLines.join('\n')}\n\`\`\``,
+      name: '📋 ON-CHAIN TELEMETRY',
+      value: `\`\`\`yaml\n${telemetryLines.join('\n')}\n\`\`\`\n> 🔗 ${quickLinks}`,
       inline: false,
     },
   ];
 
   const embed: Record<string, unknown> = {
-    author: { name: `RŮŽE HOUSE  ·  ${labelMap[payload.event]}` },
-    title: payload.assetName,
-    url: explorerUrl,
+    author: {
+      name: `RŮŽE HOUSE  ·  ${badge.label}`,
+      icon_url: chainIcon,
+    },
+    title: `${badge.icon} ${payload.assetName}`,
+    url: explorerUrl || contractUrl,
+    thumbnail: { url: chainIcon },
     description: explorerUrl
-      ? `> Position **#${payload.positionId}** on **${payload.chain.toUpperCase()}**  ·  [View Transaction on Explorer](${explorerUrl})`
-      : `> Position **#${payload.positionId}** on **${payload.chain.toUpperCase()}**`,
+      ? `> 🎯 Position **#${payload.positionId}** on **${payload.chain.toUpperCase()}** • [View Transaction ↗](${explorerUrl})`
+      : `> 🎯 Position **#${payload.positionId}** on **${payload.chain.toUpperCase()}**`,
     color: colorMap[payload.event],
     fields,
-    footer: { text: 'Pierre Execution Desk  ·  Positions Ledger' },
+    footer: {
+      text: 'Pierre Execution Desk  ·  Positions Ledger',
+      icon_url: chainIcon,
+    },
     timestamp: new Date().toISOString(),
   };
 
@@ -236,7 +297,11 @@ export async function broadcastPositionUpdate(payload: PositionWebhookPayload): 
  */
 export async function broadcastPnlReport(payload: DiscordBroadcastPayload): Promise<boolean> {
   const symbol = getNativeCurrencySymbol(payload.chain);
+  const chainIcon = getChainIconUrl(payload.chain);
   const explorerUrl = getExplorerTxUrl(payload.chain, payload.txHash);
+  const contractUrl = getExplorerAddressUrl(payload.chain, payload.contractAddress);
+  const dexUrl = getDexScreenerTokenUrl(payload.chain, payload.contractAddress);
+
   const entry = payload.entryPriceEth ?? 0;
   const realizedPnl = payload.realizedPnlEth ?? payload.priceEth - entry;
   const roiPct = entry > 0 ? (realizedPnl / entry) * 100 : 0;
@@ -251,52 +316,65 @@ export async function broadcastPnlReport(payload: DiscordBroadcastPayload): Prom
     `Settlement Tx  :  ${shortenHex(payload.txHash, 10, 8)}`,
   ].join('\n');
 
+  const quickLinks = [
+    `[Settlement Tx ↗](${explorerUrl})`,
+    `[Contract ↗](${contractUrl})`,
+    `[DexScreener ↗](${dexUrl})`,
+  ].join('  •  ');
+
   const fields: Array<{ name: string; value: string; inline?: boolean }> = [
     {
-      name: 'OUTCOME',
-      value: isProfit ? '`PROFIT`' : '`LOSS`',
+      name: '🎯 OUTCOME',
+      value: isProfit ? '`🟢 PROFIT`' : '`🔴 LOSS`',
       inline: true,
     },
     {
-      name: 'REALIZED PNL',
+      name: '📈 REALIZED PNL',
       value: `\`${sign}${realizedPnl.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'REALIZED ROI',
+      name: '📊 REALIZED ROI',
       value: `\`${sign}${roiPct.toFixed(2)}%\``,
       inline: true,
     },
     {
-      name: 'ENTRY BASIS',
+      name: '📥 ENTRY BASIS',
       value: `\`${entry.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'EXIT SETTLEMENT',
+      name: '📤 EXIT SETTLEMENT',
       value: `\`${payload.priceEth.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'PEAK HWM',
+      name: '🏔️ PEAK HWM',
       value: `\`${peakHwm.toFixed(4)} ${symbol}\``,
       inline: true,
     },
     {
-      name: 'SETTLEMENT TELEMETRY',
-      value: `\`\`\`yaml\n${ledgerBlock}\n\`\`\``,
+      name: '📋 SETTLEMENT TELEMETRY',
+      value: `\`\`\`yaml\n${ledgerBlock}\n\`\`\`\n> 🔗 ${quickLinks}`,
       inline: false,
     },
   ];
 
   const embed: Record<string, unknown> = {
-    author: { name: 'RŮŽE HOUSE  ·  REALIZED SETTLEMENT' },
-    title: payload.assetName,
+    author: {
+      name: 'RŮŽE HOUSE  ·  REALIZED SETTLEMENT',
+      icon_url: chainIcon,
+    },
+    title: `${isProfit ? '🟢' : '🔴'} ${payload.assetName}`,
     url: explorerUrl,
-    description: `> Closed position on **${payload.chain.toUpperCase()}** with net outcome **${sign}${realizedPnl.toFixed(4)} ${symbol}** (**${sign}${roiPct.toFixed(2)}%**)  ·  [View on Explorer](${explorerUrl})`,
+    thumbnail: { url: chainIcon },
+    description: `> ⚖️ Position settlement on **${payload.chain.toUpperCase()}** • Net outcome: **${sign}${realizedPnl.toFixed(4)} ${symbol}** (**${sign}${roiPct.toFixed(2)}%**) • [View on Explorer ↗](${explorerUrl})`,
     color: isProfit ? 0x10b981 : 0xef4444,
     fields,
-    footer: { text: 'Pierre Execution Desk  ·  PnL Ledger' },
+    footer: {
+      text: 'Pierre Execution Desk  ·  PnL Ledger',
+      icon_url: chainIcon,
+    },
     timestamp: new Date().toISOString(),
   };
 
@@ -312,9 +390,13 @@ export async function broadcastPnlReport(payload: DiscordBroadcastPayload): Prom
  */
 export async function broadcastToDiscord(payload: DiscordBroadcastPayload): Promise<boolean> {
   const explorerUrl = getExplorerTxUrl(payload.chain, payload.txHash);
+  const contractUrl = getExplorerAddressUrl(payload.chain, payload.contractAddress);
+  const dexUrl = getDexScreenerTokenUrl(payload.chain, payload.contractAddress);
   const symbol = getNativeCurrencySymbol(payload.chain);
+  const chainIcon = getChainIconUrl(payload.chain);
   const actionUpper = payload.action.toUpperCase();
   const color = ACTION_COLORS[actionUpper] ?? 0xd4af37;
+  const actionIcon = ACTION_ICONS[actionUpper] ?? '⚡';
 
   const execTelemetry = [
     `Contract       :  ${payload.contractAddress}`,
@@ -323,26 +405,39 @@ export async function broadcastToDiscord(payload: DiscordBroadcastPayload): Prom
     `Tx Hash        :  ${shortenHex(payload.txHash, 10, 8)}`,
   ].join('\n');
 
+  const quickLinks = [
+    `[Transaction Receipt ↗](${explorerUrl})`,
+    `[Contract ↗](${contractUrl})`,
+    `[DexScreener ↗](${dexUrl})`,
+  ].join('  •  ');
+
   // 1. Send Order Execution log to #order-execution
   const execFields: Array<{ name: string; value: string; inline?: boolean }> = [
-    { name: 'ACTION', value: `\`${actionUpper}\``, inline: true },
-    { name: 'NETWORK', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
-    { name: 'SETTLEMENT VALUE', value: `\`${payload.priceEth.toFixed(4)} ${symbol}\``, inline: true },
+    { name: '⚡ ACTION', value: `\`${actionUpper}\``, inline: true },
+    { name: '🌐 NETWORK', value: `\`${payload.chain.toUpperCase()}\``, inline: true },
+    { name: '💰 SETTLEMENT VALUE', value: `\`${payload.priceEth.toFixed(4)} ${symbol}\``, inline: true },
     {
-      name: 'EXECUTION LEDGER',
-      value: `\`\`\`yaml\n${execTelemetry}\n\`\`\``,
+      name: '📋 EXECUTION LEDGER',
+      value: `\`\`\`yaml\n${execTelemetry}\n\`\`\`\n> 🔗 ${quickLinks}`,
       inline: false,
     },
   ];
 
   const execEmbed: Record<string, unknown> = {
-    author: { name: `RŮŽE HOUSE  ·  ORDER ${actionUpper}` },
-    title: payload.assetName,
+    author: {
+      name: `RŮŽE HOUSE  ·  ORDER ${actionUpper}`,
+      icon_url: chainIcon,
+    },
+    title: `${actionIcon} ${actionUpper}  ·  ${payload.assetName}`,
     url: explorerUrl,
-    description: `> Executed **${actionUpper}** on **${payload.chain.toUpperCase()}** for **${payload.priceEth.toFixed(4)} ${symbol}**  ·  [View Receipt on Explorer](${explorerUrl})`,
+    thumbnail: { url: chainIcon },
+    description: `> ⚡ Executed on **${payload.chain.toUpperCase()}** for **${payload.priceEth.toFixed(4)} ${symbol}**  ·  [View Receipt on Explorer ↗](${explorerUrl})`,
     color,
     fields: execFields,
-    footer: { text: 'Pierre Execution Desk  ·  Order Execution' },
+    footer: {
+      text: 'Pierre Execution Desk  ·  Order Execution',
+      icon_url: chainIcon,
+    },
     timestamp: new Date().toISOString(),
   };
 

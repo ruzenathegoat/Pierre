@@ -30,6 +30,9 @@ ROTATE_BEFORE = timedelta(hours=48)
 TIMEOUT = 25
 
 
+OPENSEA_ICON_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
+
+
 def read_webhook_url() -> str:
     for path, keys in [
         (PIERRE_WEBHOOK_ENV, ("WEBHOOK_URL",)),
@@ -67,12 +70,20 @@ def post_watchdog_embed(
         "username": "Pierre  |  System Watchdog",
         "embeds": [
             {
-                "author": {"name": f"RŮŽE HOUSE  ·  OPENSEA WATCHDOG  ·  {status_tag}"},
+                "author": {
+                    "name": f"RŮŽE HOUSE  ·  OPENSEA WATCHDOG  ·  {status_tag}",
+                    "icon_url": OPENSEA_ICON_URL,
+                },
                 "title": title,
+                "url": "https://opensea.io/settings/developer",
+                "thumbnail": {"url": OPENSEA_ICON_URL},
                 "description": description,
                 "color": color,
                 "fields": fields,
-                "footer": {"text": f"Pierre Execution Desk  ·  API Key Watchdog  ·  {ts_wib}"},
+                "footer": {
+                    "text": f"Pierre Execution Desk  ·  API Key Watchdog  ·  {ts_wib}",
+                    "icon_url": OPENSEA_ICON_URL,
+                },
             }
         ],
     }
