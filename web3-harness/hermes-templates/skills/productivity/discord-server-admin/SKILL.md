@@ -15,7 +15,8 @@ metadata:
 ## When to Use
 
 - User asks to create, rename, or organize Discord channels/categories, or wants "a home channel for you".
-- User asks to update a channel's **description/topic** ("update deskripsi channel-nya") — that is `PATCH /channels/<id>` with `{"topic":"..."}`, see step 3b.
+- User asks to update a channel's **description/topic** ("update deskripsi channel-nya", "rapihin deskripsi channel") — that is `PATCH /channels/<id>` with `{"topic":"..."}`, see step 3b. "Rapihin channel di kategori X" = sweep every child of that category (`parent_id == category id`), including ones with `topic: None`, which are usually the ones the user means.
+- Before rewriting a topic, read the thing it describes: a filter/threshold quoted in a stale topic can be wrong (check the cron script's defaults, `~/.hermes/cron/jobs.json` for what actually posts there).
 - Cron or notification output must land in a specific Discord channel (`discord:<channel_id>`).
 - The bot returns 403 / "Missing Access" when posting, and you need to tell role perms, channel overwrites, and app-level channel access apart.
 - User asks for a **verification gate** for new members ("require verify", "member baru harus verify dulu"), or for locking channels behind a `Verified` role — see section 7 and `references/member-verification.md`.
@@ -87,6 +88,8 @@ Topic max length is 1024 chars; over that the call 400s. Then verify with `GET /
 
 Keep the topic SHORT — one line, comma-separated fields, no full sentences and no rationale ("alerts only — full detail per fill: CA, chain, token, launchpad, entry-exit, tx hash, socials"). A two-sentence topic reads as "kepanjangan"; short is the default, expand only when asked. Write it in the language the user names (English when they say "versi english") and never mix two languages in one topic.
 
+Batch note: one PATCH per channel across many channels is fine — the cooldown bucket is per channel, not per guild (9 distinct channels in one loop all returned 200, ~1.5s apart). Drive it from a python script with the token read out of `~/.hermes/.env` (never inline in shell) and re-`GET` each channel at the end, so the whole sweep has one verified output table.
+
 Topic edits are rate-limited per resource: a second `PATCH /channels/<id>` within a few minutes returns `429 {"retry_after": N}`, where N can run into several hundred seconds. Do not retry in a loop — read `retry_after`, wait it out once (`sleep <N+5>` then the PATCH, backgrounded), and say the delay is Discord's cooldown with the edit queued, not the agent stalling.
 
 ## 4. Verify by actually posting — creation success means nothing
@@ -157,6 +160,21 @@ Ordering, so the server is never locked for everyone mid-setup:
 
 Per-bot recipes (Carl-bot invite, `rr verify` / `reactionrole aiov` syntax, dashboard path, what each free captcha bot actually includes) are in `references/member-verification.md`. When the owner wants the gate owned rather than rented, build it: `references/self-hosted-verify-bot.md` has the app setup, captcha renderer, panel/modal shape, config knobs and systemd unit.
 
+## 7b. Make a category read-only for a role ("read only buat kategori X")
+
+A category overwrite alone is not enough to trust. Set the deny at BOTH levels and verify per channel:
+
+1. Diagnose the complaining account FIRST, before touching permissions. Resolve their roles with `GET /guilds/<gid>/members/<user_id>` and OR the bits of every role they carry plus `@everyone` (`/guilds/<gid>/roles`). `Administrator` (`1<<3`) on any of them means channel denies cannot ever apply to that account: the test is invalid, not the config. Say so plainly and ask for a test on an account holding only the gate role.
+2. Apply the deny to the category: `{"id":"<role>","type":0,"allow":"<VIEW|READ>","deny":"<SEND|thread bits>"}` via `PATCH /channels/<category_id>`.
+3. Then apply the same entry to **every child channel** in one loop, merging into each channel's existing `permission_overwrites` array (never replacing the array — other roles' entries are in there). `PATCH /channels/<id>` with the full merged list, one call per channel, ~0.5s apart. Channel-level deny is what actually stops the client; users report "still bisa kirim" against a category-only deny and re-opening Discord does not always fix it.
+4. Verify with a fresh `GET /channels/<id>` per channel and print `send_denied` / `view` / `read` from the stored ints. Report the count (`14/14 channels read-only`), not "sudah di-set".
+
+Overwrite int to keep in mind: VIEW `1024`, SEND `2048`, READ `65536`, so a read-only entry for role X is `allow=66560, deny` including `2048`. Deny wins over any allow at either level, so a leftover `SEND` allow entry is harmless as long as the deny carries the bit.
+
+Leaving one category writable ("general-discussion gapapa") means do not touch it at all, and say in the reply which category stayed writable so the user can tell intent from an oversight.
+
+Pierre/carl-bot usually hold Administrator, so none of these denies block them: cron and alert delivery into locked channels keeps working. State that explicitly, otherwise the owner reads "read-only everywhere" as "bot will break".
+
 ## 8. Prefer an existing channel webhook when the message must look clean
 
 Cron delivery (`deliver: discord:<id>`) prefixes every post with `Cronjob Response: <name> / (job_id: ...) / To stop or manage this job...`. When the channel should look like a product feed:
@@ -169,6 +187,8 @@ Cron delivery (`deliver: discord:<id>`) prefixes every post with `Cronjob Respon
 Webhook execute without `?wait=true` returns **204 with an empty body** — no message id, so you cannot clean up by webhook message id afterwards; delete via `DELETE /channels/<id>/messages/<msg_id>` after listing the channel. Add `?wait=true` when you need the id.
 
 Webhook tokens are channel-scoped credentials: `~/.hermes/.env` is not the place for them, and they must never be echoed.
+
+For designing the embed itself (hero-first layout, image cards via Pillow + multipart upload, wiring into an existing script like `agent_mint_radar.py`, verifying with a real post), see `references/webhook-embed-design.md`.
 
 ## Pitfalls
 
@@ -183,6 +203,8 @@ Webhook tokens are channel-scoped credentials: `~/.hermes/.env` is not the place
 - Category order: `PATCH /channels/<category_id> {"position": N}` only sticks when N is unique across categories — Discord tolerates ties and then orders by id, so "move it to the top" needs the whole ladder renumbered in order (0,1,2,3…), then a `GET /guilds/<id>/channels` filtered to `type==4` printed with positions to confirm.
 - `PUT /channels/<id>/messages/<mid>/reactions/<emoji>/@me` answers **204 with an empty body**: an empty response is success, not failure. Confirm by reading the message back and checking `reactions` (`[('✅', 1)]`).
 - A category id and a guild id look identical; a wrong one creates a channel in the wrong server or 404s. Resolve by name → id → `parent_id` before posting.
+- Never name a shell variable `UID` in these curl snippets: bash marks it readonly, the assignment silently keeps the shell's own uid, and the member lookup answers `{"message":"Unknown User","code":10013}` for a user that exists. Use `MEMBER`/`USER_ID`. A `10013` on a snowflake you were given in chat is this bug, not a gone member.
+- "Masih bisa kirim padahal sudah read-only" has exactly two causes worth checking in order: the account carries `Administrator` (owner/staff role, or the test was run on the owner's own account), or the deny exists only on the category while the channel the user actually typed in has its own overwrite list. Check the member's aggregated bits before changing any permission.
 - Editing `~/.hermes/.env` or the bot's role is not part of "create a channel" — do not touch either; ask the user to change server settings instead.
 - Report to a non-technical owner: name the artifact (channel name + id), the blocker, and the exact menu path. Skip the permission-bit math in the reply even though you used it to diagnose.
 - A `429` on a topic edit is a cooldown, not a failure: the stored topic keeps its old value until a later PATCH succeeds, so wait it out or state that the new text is queued — never report it live without a fresh `GET` showing the new string.

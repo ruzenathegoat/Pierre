@@ -10,7 +10,8 @@ Reference for the "is this feed connected?" procedure in SKILL.md. Applies to th
 | Auth header | `X-API-KEY: <key>` |
 | Key cache | `.opensea-key-cache.json` next to `.env`; `marketplace.ts` writes the key into `.env` too |
 | Auto-provision | `POST https://api.opensea.io/api/v2/auth/keys` (free 7-day key) |
-| Rate limit | key creation capped per IP per day; over the cap returns `429 Key creation rate limit exceeded` |
+| Rate limit | key creation capped per IP per day (rolling window, not 00:00 UTC); over the cap returns `429 Key creation rate limit exceeded` |
+| Rotation state | `.opensea-key-state.json` next to `.env`: `fingerprint`, `expires_at`, `rotated_at`, `alerted_date`; writer is `~/.hermes/scripts/opensea_key_watch.py` |
 | Probe | `GET /api/v2/collections?limit=1`, or `GET /api/v2/chain/<chain>/account/<addr>/nfts?limit=1` |
 | Chain mapping | `ethereum`, `base`, `bsc` (OpenSea chain slugs differ from the harness aliases; check `toOpenSeaChain()` in `marketplace.ts`) |
 
@@ -19,7 +20,7 @@ Health signal inside `inspect_market_orderbook` output: `source` is `opensea-v2`
 ## Zero-or-error cheat sheet
 
 - `HTTP 401 Missing an API Key` → key empty/rejected; check length, not just presence.
-- `HTTP 429` on `/auth/keys` → daily IP quota spent; manual key or wait.
+- `HTTP 429` on `/auth/keys` → IP quota spent for a rolling ~24h window measured from the last mints, not from 00:00 UTC; manual key or wait, and state the wait as an estimate.
 - `HTTP 200` but `source: "fallback"` → wrapper never sent the key (process env stale) or the collection/token is unknown to that provider; re-probe the API directly to tell the two apart.
 - `HTTP 200` with a real payload but zero bids → genuinely no bids; this is the only case where zero means zero.
 

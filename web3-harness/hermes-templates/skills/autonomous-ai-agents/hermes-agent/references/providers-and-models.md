@@ -32,6 +32,30 @@ Full docs: https://hermes-agent.nousresearch.com/docs/integrations/providers
 Multiple credentials per provider pool and rotate automatically (`hermes auth`).
 Fallback chain when the primary fails: `hermes fallback add|remove|list`.
 
+### Claude subscription (Pro/Max/Ultra) without an API key
+
+Two routes, and they bill differently — pick by plan:
+
+- **Plugin `claude-subscription-directsdk` (official, catalog) → works on Pro, Max and Ultra.**
+  Drives the official `claude` CLI; usage draws on the plan's own allowance. Setup:
+  `npm install -g @anthropic-ai/claude-code` → `hermes plugins install claude-subscription-directsdk`
+  → `hermes plugins enable claude-subscription-directsdk-experimental` → `claude auth login`
+  (browser; never `claude setup-token`, harness rejects env-token overrides) →
+  `hermes config set model.provider claude-subscription-directsdk-experimental`. Check the login with
+  `claude auth status` (prints `loggedIn`, `authMethod`, `subscriptionType`; the CLI reports Ultra
+  accounts as `max`). Verify end to end with `hermes chat -q "..." -m sonnet` before switching the
+  default provider — an unauthenticated plugin fails every turn.
+- **Built-in `anthropic` OAuth (`hermes model` → Anthropic OAuth) → Max only, plus purchased extra
+  usage credits.** Pro cannot use it; the base Max allowance is never touched, only the extra credits.
+
+Setting `model.provider` auto-clears `model.base_url`/`model.api_mode` when they belonged to the
+previous provider, so no manual config edit is needed when switching.
+
+**npm global installs on a host where `/usr` is not writable:** `npm install -g` fails with
+`EACCES … mkdir '/usr/lib/node_modules/<pkg>'`. Run `npm config set prefix "$HOME/.npm-global"`
+and install again, then add `export PATH="$HOME/.npm-global/bin:$PATH"` to `~/.bashrc`. The
+DirectSDK plugin searches `~/.npm-global/bin` itself, so Hermes finds `claude` even with a minimal PATH.
+
 ### User-defined model aliases
 
 Work with `/model <name>` in CLI and every gateway platform. Resolved by

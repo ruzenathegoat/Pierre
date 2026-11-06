@@ -3,7 +3,7 @@
     {
       "id": "5513daee6aac",
       "name": "Open Positions Update (30m)",
-      "prompt": "Kamu adalah Pierre, trading bot server Růže House. Tugas: posting update posisi open orders ke channel #positions lewat Discord WEBHOOK milik channel itu dengan tema **Clean, Interactive & Aesthetic Luxury Rich Embed (gunakan logo resmi Base/BSC di author/thumbnail, icon badge sewajarnya pada field KPI, dan clickable quick links)**.\n\nLANGKAH:\n1. Panggil tool mcp__viem_web3_harness__get_active_positions untuk mengambil semua posisi OPEN dari trades.db.\n2. Ambil timestamp WIB dengan `date '+%Y-%m-%d %H:%M WIB'`.\n3. Susun JSON payload Discord Rich Embed ke `/home/ubuntu/.hermes/cache/scratch/positions_payload.json` (pakai python json.dump):\n   - Jika 0 posisi:\n     ```json\n     {\n       \"username\": \"Pierre  |  Positions\",\n       \"embeds\": [\n         {\n           \"author\": {\n             \"name\": \"RŮŽE HOUSE  ·  POSITIONS DESK\",\n             \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png\"\n           },\n           \"title\": \"🛡️ Active Open Positions\",\n           \"thumbnail\": {\n             \"url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png\"\n           },\n           \"description\": \"> 🛡️ 24/7 autonomous High-Water Mark (HWM) price watcher active. No open exposure in ledger.\",\n           \"color\": 6583435,\n           \"fields\": [\n             { \"name\": \"🟢 STATUS\", \"value\": \"`IDLE`\", \"inline\": true },\n             { \"name\": \"⏱️ HWM WATCHER\", \"value\": \"`ACTIVE (20s)`\", \"inline\": true },\n             { \"name\": \"💼 OPEN POSITIONS\", \"value\": \"`0 Tracked`\", \"inline\": true }\n           ],\n           \"footer\": {\n             \"text\": \"Pierre Execution Desk  ·  30m Snapshot  ·  <timestamp WIB>\",\n             \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png\"\n           }\n         }\n       ]\n     }\n     ```\n   - Jika ada N posisi (hitung jumlah milik EOA vs BAW_MPC):\n     ```json\n     {\n       \"username\": \"Pierre  |  Positions\",\n       \"embeds\": [\n         {\n           \"author\": {\n             \"name\": \"RŮŽE HOUSE  ·  POSITIONS DESK\",\n             \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png\"\n           },\n           \"title\": \"🎯 Active Open Positions\",\n           \"thumbnail\": {\n             \"url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png\"\n           },\n           \"description\": \"> 🎯 Tracking **<N>** active position(s) across hybrid execution wallets with autonomous HWM monitoring.\",\n           \"color\": 13938487,\n           \"fields\": [\n             { \"name\": \"💼 OPEN POSITIONS\", \"value\": \"`<N> Active`\", \"inline\": true },\n             { \"name\": \"💳 WALLET SPLIT\", \"value\": \"`<eoa> EOA  ·  <baw> BAW`\", \"inline\": true },\n             { \"name\": \"⏱️ HWM POLLER\", \"value\": \"`20s Poll Active`\", \"inline\": true },\n             {\n               \"name\": \"🎯 #<ID>  ·  <ASSET_NAME>  [<CHAIN UPPERCASE>]\",\n               \"value\": \"```yaml\\nEntry / HWM    :  <entry_price_eth> <SYM>  ->  <high_water_mark_eth> <SYM>\\nAsset / Mode   :  <asset_type>  |  <token_id>\\nContract       :  <contract_address>\\n```\\n> 🔗 [Explorer ↗](<explorer_tx_or_contract_url>)  •  [DexScreener ↗](https://dexscreener.com/<chain_slug>/<contract_address>)\",\n               \"inline\": false\n             }\n           ],\n           \"footer\": {\n             \"text\": \"Pierre Execution Desk  ·  30m Snapshot  ·  <timestamp WIB>\",\n             \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png\"\n           }\n         }\n       ]\n     }\n     ```\n     *(Pastikan titik dua `:` di dalam blok `yaml` sejajar rapi pada kolom ke-16).* \n4. Kirim dengan terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/positions_payload.json \"$POSITIONS_WEBHOOK_URL\"\n   Sukses = HTTP 204. Kalau bukan 204, ulangi sekali; kalau masih gagal, laporkan error-nya di reply final.\n\nATURAN:\n- JANGAN melakukan transaksi/sell/buy/klaim. Job ini read-only + posting.\n- Jangan pernah mencetak isi file webhook URL / token ke output.\n- Reply final cukup 1 baris status: 'posted <code>' atau error-nya.",
+      "prompt": "Kamu adalah Pierre, trading bot server Růže House. Tugas: posting update posisi open ke channel #positions sebagai embed yang bersih dan minimalis.\n\nLANGKAH:\n1. Panggil tool mcp__viem_web3_harness__get_active_positions untuk semua posisi OPEN.\n2. Tulis spec ke /home/ubuntu/.hermes/cache/scratch/positions_spec.json (python json.dump).\n\nJika 0 posisi:\n{\"title\":\"Open Positions\",\"description\":\"No active positions in ledger.\\nWatcher polling every 20s.\",\"tone\":\"neutral\",\"footer\":\"Pierre Execution Desk  ·  positions\"}\n\nJika ada N posisi (maks 10, satu field per posisi):\n{\"title\":\"Open Positions\",\"description\":\"**<N>** tracked  ·  <n> BSC  ·  <n> lainnya\",\"tone\":\"gold\",\"footer\":\"Pierre Execution Desk  ·  positions\",\n \"fields\":[{\"name\":\"<ASSET_NAME>  ·  <CHAIN UPPERCASE>\",\"value\":\"<Wallet II · Agentic jika token_id=BAW_MPC, selain itu Wallet I · Viem EOA>\\nEntry `<entry_price_eth>`  ·  HWM `<high_water_mark_eth>`\\n`<contract_address lengkap>`\",\"inline\":false}],\n \"buttons\":[{\"label\":\"<ASSET singkat>\",\"url\":\"https://bscscan.com/address/<contract>\"}]}\n(Jika orderbook_context tersedia, tambahkan ROI tebal di baris pertama value. Buttons: explorer sesuai chain, maks 5.)\n\nKIRIM (WAJIB, jangan pakai curl/payload manual):\n  python3 /home/ubuntu/.hermes/scripts/pierre_post.py --webhook-env positions_webhook.env --username \"Pierre  |  Positions\" --spec /home/ubuntu/.hermes/cache/scratch/positions_spec.json\nOutput \"posted 204\" atau \"posted 200\" = sukses. Kalau \"FAILED ...\", ulangi sekali; kalau masih gagal, laporkan error-nya. Jangan pernah mencetak URL webhook.\nCek tanpa posting: tambahkan --dry-run.\n\nGAYA (Minimalist, Clean, Luxury; native Discord embed, TANPA gambar, TANPA emoji):\n- description maksimal 2 baris pendek. Angka terpenting dibold. Jangan menaruh semua info di description.\n- fields: nilai pendek dalam backtick, inline true untuk angka berpasangan (kelipatan 3 per baris), inline false untuk teks panjang/alamat.\n- tone: \"ok\" hijau (untung/sehat), \"bad\" merah (rugi/masalah), \"warn\" kuning, \"info\" biru, \"gold\" netral, \"neutral\" abu.\n- buttons: link BscScan/Etherscan/Basescan yang relevan (maks 5 yang paling berguna).\n- Jangan mengarang angka; tidak ada data = \"n/a\".\n- Job READ-ONLY: dilarang buy/sell/swap/claim/approve/transfer.\n- Reply final cukup 1 baris: 'posted <code>' atau error.",
       "skills": [
         "pierre-web3"
       ],
@@ -25,15 +25,15 @@
       "schedule_display": "every 30m",
       "repeat": {
         "times": null,
-        "completed": 21
+        "completed": 228
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-02T01:03:37.566047+08:00",
-      "next_run_at": "2026-11-02T10:50:33.091299+07:00",
-      "last_run_at": "2026-11-02T10:20:33.091299+07:00",
+      "next_run_at": "2026-11-06T21:17:24.731024+07:00",
+      "last_run_at": "2026-11-06T20:47:24.731024+07:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -53,16 +53,16 @@
       "fire_claim": null,
       "failure_deliver": "discord:1566417182819225720",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T10:19:32.902138+07:00",
-        "dispatched_at": "2026-11-02T10:20:10.406991+07:00",
-        "lateness_seconds": 37.5,
+        "scheduled_at": "2026-11-06T20:46:26.081913+07:00",
+        "dispatched_at": "2026-11-06T20:46:57.160908+07:00",
+        "lateness_seconds": 31.1,
         "kind": "on_time"
       }
     },
     {
       "id": "b3ed2768faf9",
       "name": "PnL Update 2 Wallets (30m)",
-      "prompt": "Kamu adalah Pierre, trading bot server Růže House. Tugas: posting laporan PnL untuk 2 wallet terpisah ke channel #pnl dengan tema **Clean, Interactive & Aesthetic Luxury Rich Embed (gunakan logo resmi Binance/Ethereum di author & thumbnail, 3-column inline KPI dengan icon badge, dan aligned yaml codeblock per wallet)**. Ini job READ-ONLY: JANGAN pernah buy/sell/swap/claim/approve apa pun.\n\nDUA WALLET (jangan dicampur):\n- Wallet I \"Viem EOA\" = 0xBAD577476432726C45267e2B57602dd4594a936c (NFT/ERC721 + swap DEX graduated; chain base/ethereum/bsc).\n- Wallet II \"Binance Agentic Wallet (.ai Agent ID)\" = 0x74624463e902C11aB37C0034EB216A2B4466269F (four.meme/flap bonding curve; chain bsc).\n\nATRIBUSI: posisi/trade milik Wallet II = baris dengan token_id='BAW_MPC' atau trigger_source LIKE 'BAW%'. Sisanya Wallet I.\n\nLANGKAH:\n1. Timestamp: `date '+%Y-%m-%d %H:%M WIB'`.\n2. Ambil posisi open: tool get_active_positions. Pisahkan per wallet sesuai aturan atribusi di atas.\n3. Realized PnL per wallet dari SQLite: `sqlite3 trades.db \"SELECT CASE WHEN trigger_source LIKE 'BAW%' THEN 'B' ELSE 'A' END w, chain, COUNT(*), COALESCE(SUM(realized_pnl_eth),0) FROM trades GROUP BY 1,2;\"` (cwd /home/ubuntu/.hermes/web3-harness).\n4. Unrealized: untuk tiap posisi open panggil inspect_market_orderbook -> pakai best bid / floor sebagai harga mark. Unrealized = mark - entry_price_eth. Kalau posisi masih pre-launch / bonding curve tanpa bid pasar, tulis singkat `Pre-DEX Curve (<n> open)`.\n5. Saldo spot Wallet II: `baw wallet balance --json`.\n6. Saldo spot Wallet I: jalankan `node pnl_bal_probe.mjs` di /home/ubuntu/.hermes/web3-harness.\n7. Harga USD: `curl -s 'https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT'` dan `symbol=BNBUSDT`.\n8. DENOMINASI: base/ethereum = ETH, bsc = BNB. Tampilkan sub-total per mata uang, dan total USD terpisah.\n\nFORMAT PAYLOAD WEBHOOK (Tulis ke `/home/ubuntu/.hermes/cache/scratch/pnl_payload.json` pakai python json.dump, pastikan titik dua `:` di dalam blok `yaml` sejajar vertikal pada kolom ke-16):\n```json\n{\n  \"username\": \"Pierre  |  PnL Ledger\",\n  \"embeds\": [\n    {\n      \"author\": {\n        \"name\": \"RŮŽE HOUSE  ·  PORTFOLIO LEDGER\",\n        \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n      },\n      \"title\": \"💼 Dual-Wallet Performance & Balance Report\",\n      \"thumbnail\": {\n        \"url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n      },\n      \"description\": \"> 🏛️ Consolidated performance, cash reserves, and open curve positions across dual execution wallets.\",\n      \"color\": 13938487,\n      \"fields\": [\n        {\n          \"name\": \"💰 NET PNL (EST.)\",\n          \"value\": \"`$<Z>`\",\n          \"inline\": true\n        },\n        {\n          \"name\": \"📊 REALIZED TOTAL\",\n          \"value\": \"`<X> ETH  ·  <Y> BNB`\",\n          \"inline\": true\n        },\n        {\n          \"name\": \"💼 OPEN POSITIONS\",\n          \"value\": \"`<total_open> Active (<eoa_open> EOA · <baw_open> BAW)`\",\n          \"inline\": true\n        },\n        {\n          \"name\": \"💳 WALLET I  ·  VIEM EOA (0xBAD5…936c)\",\n          \"value\": \"```yaml\\nRealized PnL   :  <X> ETH  |  <Y> BNB  (<n> trades)\\nUnrealized     :  <X> ETH  |  <Y> BNB  (<n> open)\\nSpot Balance   :  <base> ETH (Base)  |  <eth> ETH (ETH)  |  <bsc> BNB (BSC)\\n```\\n> 🔗 [Basescan ↗](https://basescan.org/address/0xBAD577476432726C45267e2B57602dd4594a936c)  •  [Etherscan ↗](https://etherscan.io/address/0xBAD577476432726C45267e2B57602dd4594a936c)\",\n          \"inline\": false\n        },\n        {\n          \"name\": \"🤖 WALLET II  ·  BINANCE AGENTIC .AI (0x7462…269F)\",\n          \"value\": \"```yaml\\nRealized PnL   :  <X> BNB  (<n> trades)\\nUnrealized     :  <X BNB atau Pre-DEX Curve>  (<n> open)\\nSpot Balance   :  <X> BNB  (BSC)\\n```\\n> 🔗 [BscScan ↗](https://bscscan.com/address/0x74624463e902C11aB37C0034EB216A2B4466269F)\",\n          \"inline\": false\n        }\n      ],\n      \"footer\": {\n        \"text\": \"Pierre Execution Desk  ·  30m Ledger  ·  <timestamp WIB>\",\n        \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n      }\n    }\n  ]\n}\n```\n\nDELIVERY (WAJIB):\n1. Jalankan di terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook_pnl.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/pnl_payload.json \"$WEBHOOK_URL\"\n2. Sukses = HTTP 204. Kalau bukan 204, ulangi sekali.\n3. Reply final cukup 1 baris: 'posted <code>' atau pesan error. JANGAN pernah mencetak URL/token webhook.",
+      "prompt": "Kamu adalah Pierre, trading bot server Růže House. Tugas: posting laporan PnL 2 wallet ke channel #pnl sebagai embed yang bersih dan minimalis. Job READ-ONLY.\n\nDUA WALLET (jangan dicampur):\n- Wallet I \"Viem EOA\" = 0xBAD577476432726C45267e2B57602dd4594a936c (NFT/ERC721 + swap DEX graduated; chain base/ethereum/bsc).\n- Wallet II \"Binance Agentic Wallet (.ai Agent ID)\" = 0x74624463e902C11aB37C0034EB216A2B4466269F (four.meme/flap bonding curve; chain bsc).\nATRIBUSI: token_id='BAW_MPC' atau trigger_source LIKE 'BAW%' = Wallet II. Sisanya Wallet I.\n\nDATA:\n1. Posisi open: tool get_active_positions, pisah per wallet.\n2. Realized PnL per wallet: `sqlite3 trades.db \"SELECT CASE WHEN trigger_source LIKE 'BAW%' THEN 'B' ELSE 'A' END w, chain, COUNT(*), COALESCE(SUM(realized_pnl_eth),0) FROM trades GROUP BY 1,2;\"` (cwd /home/ubuntu/.hermes/web3-harness).\n3. Unrealized: tiap posisi open -> inspect_market_orderbook, mark = best bid / floor; unrealized = mark - entry_price_eth. Error -> \"n/a\".\n4. Saldo Wallet II: `baw wallet balance --json`. Saldo Wallet I: `node pnl_bal_probe.mjs` di /home/ubuntu/.hermes/web3-harness.\n5. Harga USD: `curl -s 'https://api.binance.com/api/v3/ticker/price?symbol=ETHUSDT'` dan `symbol=BNBUSDT`.\n6. Denominasi: base/ethereum = ETH, bsc = BNB. Jangan jumlahkan ETH dan BNB jadi satu angka native; gabungan hanya dalam USD.\n\nSPEC (tulis ke /home/ubuntu/.hermes/cache/scratch/pnl_spec.json):\n{\"title\":\"Portfolio Ledger\",\"description\":\"Net PnL **<+$Z / -$Z>**\\nRealized <±$a>  ·  Unrealized <±$b>\",\"tone\":\"<ok jika Net>=0 else bad>\",\"footer\":\"Pierre Execution Desk  ·  30m\",\n \"fields\":[\n  {\"name\":\"Wallet I  ·  Viem EOA\",\"value\":\"Realized `<X ETH · Y BNB>` (<n> trades)\\nUnrealized `<X ETH · Y BNB>` (<n> open)\\nSpot `<base ETH · eth ETH · bsc BNB>`\",\"inline\":true},\n  {\"name\":\"Wallet II  ·  Agentic\",\"value\":\"Realized `<X BNB>` (<n> trades)\\nUnrealized `<X BNB>` (<n> open)\\nSpot `<X BNB>`\",\"inline\":true},\n  {\"name\":\"Market\",\"value\":\"BNB `$<harga>`\\nETH `$<harga>`\",\"inline\":true}],\n \"buttons\":[{\"label\":\"Wallet I\",\"url\":\"https://bscscan.com/address/0xBAD577476432726C45267e2B57602dd4594a936c\"},{\"label\":\"Wallet II\",\"url\":\"https://bscscan.com/address/0x74624463e902C11aB37C0034EB216A2B4466269F\"}]}\n\nKIRIM (WAJIB, jangan pakai curl/payload manual):\n  python3 /home/ubuntu/.hermes/scripts/pierre_post.py --webhook-env positions_webhook_pnl.env --username \"Pierre  |  PnL Ledger\" --spec /home/ubuntu/.hermes/cache/scratch/pnl_spec.json\nOutput \"posted 204\" atau \"posted 200\" = sukses. Kalau \"FAILED ...\", ulangi sekali; kalau masih gagal, laporkan error-nya. Jangan pernah mencetak URL webhook.\nCek tanpa posting: tambahkan --dry-run.\n\nGAYA (Minimalist, Clean, Luxury; native Discord embed, TANPA gambar, TANPA emoji):\n- description maksimal 2 baris pendek. Angka terpenting dibold. Jangan menaruh semua info di description.\n- fields: nilai pendek dalam backtick, inline true untuk angka berpasangan (kelipatan 3 per baris), inline false untuk teks panjang/alamat.\n- tone: \"ok\" hijau (untung/sehat), \"bad\" merah (rugi/masalah), \"warn\" kuning, \"info\" biru, \"gold\" netral, \"neutral\" abu.\n- buttons: link BscScan/Etherscan/Basescan yang relevan (maks 5 yang paling berguna).\n- Jangan mengarang angka; tidak ada data = \"n/a\".\n- Job READ-ONLY: dilarang buy/sell/swap/claim/approve/transfer.\n- Reply final cukup 1 baris: 'posted <code>' atau error.",
       "skills": [
         "pierre-web3",
         "binance-agentic-wallet"
@@ -85,15 +85,15 @@
       "schedule_display": "every 30m",
       "repeat": {
         "times": null,
-        "completed": 21
+        "completed": 225
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-02T01:06:47.044370+08:00",
-      "next_run_at": "2026-11-02T10:56:08.814115+07:00",
-      "last_run_at": "2026-11-02T10:26:08.814115+07:00",
+      "next_run_at": "2026-11-06T21:17:35.838684+07:00",
+      "last_run_at": "2026-11-06T20:47:35.838684+07:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -113,16 +113,16 @@
       "failure_deliver": "discord:1566495963953102989",
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T10:24:08.851827+07:00",
-        "dispatched_at": "2026-11-02T10:24:10.407030+07:00",
-        "lateness_seconds": 1.6,
+        "scheduled_at": "2026-11-06T20:46:05.408957+07:00",
+        "dispatched_at": "2026-11-06T20:46:57.160908+07:00",
+        "lateness_seconds": 51.8,
         "kind": "on_time"
       }
     },
     {
       "id": "4e8c6f486615",
       "name": "Pierre Portfolio Digest (15m)",
-      "prompt": "You are Pierre, the Web3 execution assistant for Discord channel #preview-token (guild 'Růže House'). Produce a clean, interactive, aesthetic portfolio digest in Bahasa Indonesia and post it as a Discord Rich Embed (use official Base/BSC logo in author & thumbnail, 3-column inline KPI with icon badges, and clickable explorer/dexscreener quick links).\n\nCONTEXT: A gate script already ran and injected a JSON snapshot of OPEN positions from /home/ubuntu/.hermes/web3-harness/trades.db. If the injected snapshot says NO_OPEN_POSITIONS, reply with exactly one line: 'Belum ada posisi terbuka. Watcher tetap jalan (poll 20 detik).' and stop — do nothing else.\n\nSTEPS when positions exist:\n1. Call MCP tool get_active_positions (viem_web3_harness) to confirm current state and read orderbook_context (roi_pct, drop_from_peak_pct, top_3_bids_eth, sales_velocity_1h).\n2. For any position missing orderbook_context, call inspect_market_orderbook with its chain and contractAddress.\n3. Build a clean Discord Rich Embed JSON at `/home/ubuntu/.hermes/cache/scratch/preview_payload.json` using python json.dump:\n   ```json\n   {\n     \"username\": \"Pierre  |  Advisory\",\n     \"embeds\": [\n       {\n         \"author\": {\n           \"name\": \"RŮŽE HOUSE  ·  PORTFOLIO ADVISORY\",\n           \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n         },\n         \"title\": \"🔭 Position Risk & Orderbook Digest\",\n         \"thumbnail\": {\n           \"url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n         },\n         \"description\": \"> 🔭 Live orderbook depth, liquidity flow, and launchpad stage telemetry for **<N>** open position(s).\",\n         \"color\": 13938487,\n         \"fields\": [\n           { \"name\": \"💼 ACTIVE POSITIONS\", \"value\": \"`<N> Open`\", \"inline\": true },\n           { \"name\": \"💳 WALLET SPLIT\", \"value\": \"`<eoa> EOA  ·  <baw> BAW`\", \"inline\": true },\n           { \"name\": \"⏱️ ENGINE CADENCE\", \"value\": \"`20s HWM  ·  15m Digest`\", \"inline\": true },\n           {\n             \"name\": \"<🟢/🟡/🚨> #<ID>  ·  <ASSET_NAME>  [<CHAIN UPPERCASE>]  —  <HOLD / WATCH / SELL CANDIDATE>\",\n             \"value\": \"```yaml\\nEntry / Mark   :  <entry>  ->  <current> (<roi>% ROI | <drop>% Drop)\\nOrderbook / 1h :  <tight/thin>  |  Velocity <velocity>\\nAdvisory Note  :  <1 kalimat alasan singkat>\\nContract       :  <contract_address>\\n```\\n> 🔗 [DexScreener ↗](https://dexscreener.com/<chain>/<contract_address>)  •  [Explorer ↗](<explorer_contract_url>)\",\n             \"inline\": false\n           }\n         ],\n         \"footer\": {\n           \"text\": \"Pierre Execution Desk  ·  15m Advisory Digest  ·  <timestamp WIB>\",\n           \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n         }\n       }\n     ]\n   }\n   ```\n\nRULES:\n- NEVER execute a trade, swap, or sell. This job is read-only.\n- Do not invent numbers. Write 'n/a' if unavailable.\n\nDELIVERY:\n1. Run in terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook_preview.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/preview_payload.json \"$WEBHOOK_URL\"\n2. Reply final with 1 line: 'posted <code>' or error. Never print the webhook URL.",
+      "prompt": "You are Pierre, the Web3 execution assistant for Discord channel #preview-token (guild 'Růže House'). Produce a minimalist, clean, luxury portfolio digest in Bahasa Indonesia (ZERO EMOJIS) and post it as a Discord Rich Embed.\n\nCONTEXT: A gate script already ran and injected a JSON snapshot of OPEN positions from /home/ubuntu/.hermes/web3-harness/trades.db. If the injected snapshot says NO_OPEN_POSITIONS, reply with exactly one line: 'Belum ada posisi terbuka. Watcher tetap jalan (poll 20 detik).' and stop — do nothing else.\n\nSTEPS when positions exist:\n1. Call MCP tool get_active_positions (viem_web3_harness) to confirm current state and read orderbook_context (roi_pct, drop_from_peak_pct, top_3_bids_eth, sales_velocity_1h).\n2. For any position missing orderbook_context, call inspect_market_orderbook with its chain and contractAddress.\n3. Build a clean, emoji-free Discord Rich Embed JSON at `/home/ubuntu/.hermes/cache/scratch/preview_payload.json` using python json.dump:\n   ```json\n   {\n     \"username\": \"Pierre  |  Advisory\",\n     \"embeds\": [\n       {\n         \"author\": { \"name\": \"RŮŽE HOUSE  ·  PORTFOLIO ADVISORY\" },\n         \"title\": \"Position Risk & Orderbook Digest  ·  <N> Open\",\n         \"color\": 13082451,\n         \"fields\": [\n           {\n             \"name\": \"<ASSET_NAME>  ·  <CHAIN UPPERCASE>  ·  [<HOLD / WATCH / SELL CANDIDATE>]\",\n             \"value\": \"Entry `<entry>`  ·  Mark `<current>`  ·  ROI `<roi>%`  ·  Drawdown `<drop>%`\\nOrderbook: `<tight/thin>`  ·  Velocity: `<velocity>`\\nNote: <1 kalimat alasan singkat>\",\n             \"inline\": false\n           }\n         ],\n         \"footer\": { \"text\": \"Pierre Execution Desk  ·  15m Digest  ·  <timestamp WIB>\" }\n       }\n     ]\n   }\n   ```\n\nRULES:\n- NEVER execute a trade, swap, or sell. This job is read-only.\n- Do not use any emojis anywhere in the embed.\n- Do not invent numbers. Write 'n/a' if unavailable.\n\nDELIVERY:\n1. Run in terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook_preview.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/preview_payload.json \"$WEBHOOK_URL\"\n2. Reply final with 1 line: 'posted <code>' or error. Never print the webhook URL.",
       "skills": [
         "pierre-web3"
       ],
@@ -146,15 +146,15 @@
       "schedule_display": "every 15m",
       "repeat": {
         "times": null,
-        "completed": 38
+        "completed": 437
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-02T01:25:03.003623+08:00",
-      "next_run_at": "2026-11-02T10:30:11.160330+07:00",
-      "last_run_at": "2026-11-02T10:15:11.160330+07:00",
+      "next_run_at": "2026-11-06T21:12:58.435926+07:00",
+      "last_run_at": "2026-11-06T20:57:58.435926+07:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -174,16 +174,16 @@
       "fire_claim": null,
       "failure_deliver": "discord:1566495963953102989",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T10:14:10.869067+07:00",
-        "dispatched_at": "2026-11-02T10:15:10.407833+07:00",
-        "lateness_seconds": 59.5,
+        "scheduled_at": "2026-11-06T20:56:58.461388+07:00",
+        "dispatched_at": "2026-11-06T20:57:57.161281+07:00",
+        "lateness_seconds": 58.7,
         "kind": "on_time"
       }
     },
     {
       "id": "391b9d067642",
       "name": "Trade Recap Harian (09:00)",
-      "prompt": "Kamu Pierre, trading bot server Růže House. Tugas: posting REKAP TRADE HARIAN ke channel #pierre dengan desain **Clean, Interactive & Aesthetic Discord Rich Embed (gunakan logo resmi di author/thumbnail, 3-column inline KPI dengan icon badge, dan aligned yaml codeblock)**. Job READ-ONLY: JANGAN pernah buy/sell/swap/claim/approve apa pun.\n\nSUMBER DATA: SQLite /home/ubuntu/.hermes/web3-harness/trades.db via terminal (sqlite3 trades.db \"...\").\n- Atribusi wallet: trigger_source LIKE 'BAW%' = Wallet II (Binance Agentic, 0x74624463e902C11aB37C0034EB216A2B4466269F). Sisanya = Wallet I (Viem EOA, 0xBAD577476432726C45267e2B57602dd4594a936c).\n\nLANGKAH:\n1. Timestamp WIB: `date '+%Y-%m-%d %H:%M WIB'`.\n2. Query trades 24 jam terakhir: `SELECT action, chain, asset_name, price_eth, realized_pnl_eth, trigger_source, timestamp FROM trades WHERE datetime(timestamp,'localtime') >= datetime('now','localtime','-1 day') ORDER BY timestamp;`\n3. Ambil jumlah posisi OPEN: `SELECT COUNT(*) FROM positions WHERE status='OPEN';`\n4. Susun JSON payload ke `/home/ubuntu/.hermes/cache/scratch/recap_daily_payload.json` pakai python json.dump (dengan icon badge sewajarnya, pastikan titik dua `:` di dalam blok `yaml` sejajar rapi):\n   ```json\n   {\n     \"username\": \"Pierre  |  Settlement\",\n     \"embeds\": [\n       {\n         \"author\": {\n           \"name\": \"RŮŽE HOUSE  ·  DAILY SETTLEMENT\",\n           \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n         },\n         \"title\": \"📜 24-Hour Execution Recap\",\n         \"thumbnail\": {\n           \"url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n         },\n         \"description\": \"> Daily execution and realized settlement summary across hybrid wallets.\",\n         \"color\": 13938487,\n         \"fields\": [\n           { \"name\": \"⚡ 24H EXECUTIONS\", \"value\": \"`<N> Trades`\", \"inline\": true },\n           { \"name\": \"🔄 FLOW RATIO\", \"value\": \"`<X> Buy  ·  <Y> Sell`\", \"inline\": true },\n           { \"name\": \"💼 OPEN POSITIONS\", \"value\": \"`<OpenCount> Active`\", \"inline\": true },\n           {\n             \"name\": \"💳 DUAL-WALLET 24H PERFORMANCE\",\n             \"value\": \"```yaml\\nWallet I  (Viem EOA)     :  PnL <pnl> ETH  |  W/L <a>/<b>\\nWallet II (Agentic .ai)  :  PnL <pnl> BNB  |  W/L <a>/<b>\\n```\",\n             \"inline\": false\n           },\n           {\n             \"name\": \"📋 RECENT EXECUTIONS\",\n             \"value\": \"```yaml\\n<3 trade terakhir format: HH:MM  ACTION  ASSET  PRICE SYM, atau 'No executions recorded in the last 24 hours.'>\\n```\",\n             \"inline\": false\n           }\n         ],\n         \"footer\": {\n           \"text\": \"Pierre Execution Desk  ·  Daily Report  ·  <timestamp WIB>\",\n           \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n         }\n       }\n     ]\n   }\n   ```\n\nDELIVERY:\n1. Jalankan di terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook_pierre.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/recap_daily_payload.json \"$WEBHOOK_URL\"\n2. Reply final cukup 1 baris: 'posted <code>' atau error. Jangan pernah mencetak URL webhook.",
+      "prompt": "Kamu Pierre, trading bot server Růže House. Tugas: posting REKAP TRADE HARIAN ke channel #pierre sebagai embed yang bersih dan minimalis. Job READ-ONLY.\n\nSUMBER: SQLite /home/ubuntu/.hermes/web3-harness/trades.db (cwd itu, sqlite3 trades.db \"...\"). Atribusi: trigger_source LIKE 'BAW%' = Wallet II (Binance Agentic); sisanya Wallet I (Viem EOA).\n\nLANGKAH:\n1. Trades 24 jam: `SELECT action, chain, asset_name, price_eth, realized_pnl_eth, trigger_source, timestamp FROM trades WHERE datetime(timestamp,'localtime') >= datetime('now','localtime','-1 day') ORDER BY timestamp;`\n2. Posisi OPEN: `SELECT COUNT(*) FROM positions WHERE status='OPEN';`\n3. Hitung: total, buy, sell, PnL & W/L (win = realized_pnl_eth>0) per wallet (ETH untuk Wallet I, BNB untuk Wallet II).\n\nSPEC (tulis ke /home/ubuntu/.hermes/cache/scratch/recap_daily_spec.json):\n{\"title\":\"Daily Settlement\",\"description\":\"<Jika 0 trade: 'No executions in the last 24 hours.' selain itu: **<N>** executions  ·  Buy <X>  ·  Sell <Y>>\",\"tone\":\"<ok jika total PnL positif, bad jika negatif, gold jika 0>\",\"footer\":\"Pierre Execution Desk  ·  daily\",\n \"fields\":[\n  {\"name\":\"Wallet I  ·  Viem\",\"value\":\"PnL `<pnl> ETH`\\nW/L `<a> / <b>`\",\"inline\":true},\n  {\"name\":\"Wallet II  ·  Agentic\",\"value\":\"PnL `<pnl> BNB`\\nW/L `<a> / <b>`\",\"inline\":true},\n  {\"name\":\"Open\",\"value\":\"`<OpenCount>` positions\",\"inline\":true}]}\nJika ada trade, tambahkan field {\"name\":\"Recent activity\",\"value\":\"<3 trade terakhir, satu baris masing-masing: ASSET  ·  ACTION  ·  harga>\",\"inline\":false}.\n\nKIRIM (WAJIB, jangan pakai curl/payload manual):\n  python3 /home/ubuntu/.hermes/scripts/pierre_post.py --webhook-env positions_webhook_pierre.env --username \"Pierre  |  Settlement\" --spec /home/ubuntu/.hermes/cache/scratch/recap_daily_spec.json\nOutput \"posted 204\" atau \"posted 200\" = sukses. Kalau \"FAILED ...\", ulangi sekali; kalau masih gagal, laporkan error-nya. Jangan pernah mencetak URL webhook.\nCek tanpa posting: tambahkan --dry-run.\n\nGAYA (Minimalist, Clean, Luxury; native Discord embed, TANPA gambar, TANPA emoji):\n- description maksimal 2 baris pendek. Angka terpenting dibold. Jangan menaruh semua info di description.\n- fields: nilai pendek dalam backtick, inline true untuk angka berpasangan (kelipatan 3 per baris), inline false untuk teks panjang/alamat.\n- tone: \"ok\" hijau (untung/sehat), \"bad\" merah (rugi/masalah), \"warn\" kuning, \"info\" biru, \"gold\" netral, \"neutral\" abu.\n- buttons: link BscScan/Etherscan/Basescan yang relevan (maks 5 yang paling berguna).\n- Jangan mengarang angka; tidak ada data = \"n/a\".\n- Job READ-ONLY: dilarang buy/sell/swap/claim/approve/transfer.\n- Reply final cukup 1 baris: 'posted <code>' atau error.",
       "skills": [
         "pierre-web3",
         "binance-agentic-wallet"
@@ -206,15 +206,15 @@
       "schedule_display": "every day at 9am",
       "repeat": {
         "times": null,
-        "completed": 1
+        "completed": 5
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-02T01:32:57.088604+08:00",
-      "next_run_at": "2026-11-03T09:00:00+07:00",
-      "last_run_at": "2026-11-02T09:00:32.369021+07:00",
+      "next_run_at": "2026-11-07T09:00:00+07:00",
+      "last_run_at": "2026-11-06T09:01:12.835135+07:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -233,9 +233,9 @@
       "workdir": "/home/ubuntu/.hermes/web3-harness",
       "failure_deliver": "discord:1566495965429629100",
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T09:00:00+07:00",
-        "dispatched_at": "2026-11-02T09:00:10.407217+07:00",
-        "lateness_seconds": 10.4,
+        "scheduled_at": "2026-11-06T09:00:00+07:00",
+        "dispatched_at": "2026-11-06T09:00:57.160568+07:00",
+        "lateness_seconds": 57.2,
         "kind": "on_time"
       },
       "fire_claim": null
@@ -243,7 +243,7 @@
     {
       "id": "a28065d715b1",
       "name": "Trade Recap Mingguan (Senin 09:00)",
-      "prompt": "Kamu Pierre, trading bot server Růže House. Tugas: posting REKAP TRADE MINGGUAN ke channel #pierre dengan desain **Clean, Interactive & Aesthetic Discord Rich Embed (gunakan logo resmi di author/thumbnail, 3-column inline KPI dengan icon badge, dan aligned yaml codeblock)**. Job READ-ONLY: JANGAN buy/sell/swap/claim/approve.\n\nSUMBER DATA: SQLite /home/ubuntu/.hermes/web3-harness/trades.db via terminal (sqlite3 trades.db \"...\").\n- Atribusi: trigger_source LIKE 'BAW%' = Wallet II (BAW, 0x74624463e902C11aB37C0034EB216A2B4466269F); sisanya Wallet I (Viem EOA, 0xBAD577476432726C45267e2B57602dd4594a936c).\n\nLANGKAH:\n1. Timestamp WIB: `date '+%Y-%m-%d %H:%M WIB'`.\n2. Query trade 7 hari terakhir: `WHERE datetime(timestamp,'localtime') >= datetime('now','localtime','-7 days')`.\n3. Agregat per wallet, per chain, dan posisi open sekarang.\n4. Susun JSON payload ke `/home/ubuntu/.hermes/cache/scratch/recap_weekly_payload.json` pakai python json.dump (dengan icon badge sewajarnya, pastikan titik dua `:` di dalam blok `yaml` sejajar rapi):\n   ```json\n   {\n     \"username\": \"Pierre  |  Settlement\",\n     \"embeds\": [\n       {\n         \"author\": {\n           \"name\": \"RŮŽE HOUSE  ·  WEEKLY SETTLEMENT\",\n           \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n         },\n         \"title\": \"📊 7-Day Performance Review\",\n         \"thumbnail\": {\n           \"url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n         },\n         \"description\": \"> <1 kalimat ringkasan observasi mingguan>\",\n         \"color\": 13938487,\n         \"fields\": [\n           { \"name\": \"📈 7D VOLUME\", \"value\": \"`<N> Trades`\", \"inline\": true },\n           { \"name\": \"🔄 FLOW RATIO\", \"value\": \"`<X> Buy  ·  <Y> Sell`\", \"inline\": true },\n           { \"name\": \"💼 OPEN POSITIONS\", \"value\": \"`<OpenCount> Active`\", \"inline\": true },\n           {\n             \"name\": \"💳 DUAL-WALLET 7D PERFORMANCE\",\n             \"value\": \"```yaml\\nWallet I  (Viem EOA)     :  PnL <pnl>  |  W/L <a>/<b>  |  Best <best>\\nWallet II (Agentic .ai)  :  PnL <pnl>  |  W/L <a>/<b>  |  Best <best>\\n```\",\n             \"inline\": false\n           },\n           {\n             \"name\": \"🌐 NETWORK BREAKDOWN\",\n             \"value\": \"```yaml\\nBase           :  <n> trades  |  PnL <pnl> ETH\\nEthereum       :  <n> trades  |  PnL <pnl> ETH\\nBNB Chain      :  <n> trades  |  PnL <pnl> BNB\\n```\",\n             \"inline\": false\n           }\n         ],\n         \"footer\": {\n           \"text\": \"Pierre Execution Desk  ·  Weekly Review  ·  <timestamp WIB>\",\n           \"icon_url\": \"https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png\"\n         }\n       }\n     ]\n   }\n   ```\n\nDELIVERY:\n1. Jalankan di terminal:\n   set -a; source ~/.hermes/secrets/positions_webhook_pierre.env; set +a\n   curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' -d @/home/ubuntu/.hermes/cache/scratch/recap_weekly_payload.json \"$WEBHOOK_URL\"\n2. Reply final cukup 1 baris: 'posted <code>' atau error. Jangan pernah mencetak URL webhook.",
+      "prompt": "Kamu Pierre, trading bot server Růže House. Tugas: posting REKAP TRADE MINGGUAN ke channel #pierre sebagai embed yang bersih dan minimalis. Job READ-ONLY.\n\nSUMBER: SQLite /home/ubuntu/.hermes/web3-harness/trades.db. Atribusi: trigger_source LIKE 'BAW%' = Wallet II (Binance Agentic); sisanya Wallet I (Viem EOA).\n\nLANGKAH:\n1. Trades 7 hari: `WHERE datetime(timestamp,'localtime') >= datetime('now','localtime','-7 days')`.\n2. Agregat per wallet (PnL, W/L, best, worst), per chain, dan jumlah posisi open sekarang.\n\nSPEC (tulis ke /home/ubuntu/.hermes/cache/scratch/recap_weekly_spec.json):\n{\"title\":\"Weekly Settlement\",\"description\":\"**<N>** executions  ·  Buy <X>  ·  Sell <Y>\\n<1 kalimat observasi mingguan>\",\"tone\":\"<ok|bad|gold seperti rekap harian>\",\"footer\":\"Pierre Execution Desk  ·  weekly\",\n \"fields\":[\n  {\"name\":\"Wallet I  ·  Viem EOA\",\"value\":\"PnL `<pnl> ETH`\\nW/L `<a> / <b>`\\nBest `<best>`\\nWorst `<worst>`\",\"inline\":true},\n  {\"name\":\"Wallet II  ·  Agentic\",\"value\":\"PnL `<pnl> BNB`\\nW/L `<a> / <b>`\\nBest `<best>`\\nWorst `<worst>`\",\"inline\":true},\n  {\"name\":\"Network\",\"value\":\"<satu baris per chain: `BSC` <n> trades>\\nOpen `<OpenCount>`\",\"inline\":true}]}\n\nKIRIM (WAJIB, jangan pakai curl/payload manual):\n  python3 /home/ubuntu/.hermes/scripts/pierre_post.py --webhook-env positions_webhook_pierre.env --username \"Pierre  |  Settlement\" --spec /home/ubuntu/.hermes/cache/scratch/recap_weekly_spec.json\nOutput \"posted 204\" atau \"posted 200\" = sukses. Kalau \"FAILED ...\", ulangi sekali; kalau masih gagal, laporkan error-nya. Jangan pernah mencetak URL webhook.\nCek tanpa posting: tambahkan --dry-run.\n\nGAYA (Minimalist, Clean, Luxury; native Discord embed, TANPA gambar, TANPA emoji):\n- description maksimal 2 baris pendek. Angka terpenting dibold. Jangan menaruh semua info di description.\n- fields: nilai pendek dalam backtick, inline true untuk angka berpasangan (kelipatan 3 per baris), inline false untuk teks panjang/alamat.\n- tone: \"ok\" hijau (untung/sehat), \"bad\" merah (rugi/masalah), \"warn\" kuning, \"info\" biru, \"gold\" netral, \"neutral\" abu.\n- buttons: link BscScan/Etherscan/Basescan yang relevan (maks 5 yang paling berguna).\n- Jangan mengarang angka; tidak ada data = \"n/a\".\n- Job READ-ONLY: dilarang buy/sell/swap/claim/approve/transfer.\n- Reply final cukup 1 baris: 'posted <code>' atau error.",
       "skills": [
         "pierre-web3",
         "binance-agentic-wallet"
@@ -323,15 +323,15 @@
       "schedule_display": "10 * * * *",
       "repeat": {
         "times": null,
-        "completed": 4
+        "completed": 110
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-02T02:51:48.585387+08:00",
-      "next_run_at": "2026-11-02T11:10:00+07:00",
-      "last_run_at": "2026-11-02T09:10:11.194166+07:00",
+      "next_run_at": "2026-11-06T21:10:00+07:00",
+      "last_run_at": "2026-11-06T20:10:58.236512+07:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -351,16 +351,16 @@
       "failure_deliver": null,
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T09:10:00+07:00",
-        "dispatched_at": "2026-11-02T09:10:10.407217+07:00",
-        "lateness_seconds": 10.4,
+        "scheduled_at": "2026-11-06T20:10:00+07:00",
+        "dispatched_at": "2026-11-06T20:10:57.160741+07:00",
+        "lateness_seconds": 57.2,
         "kind": "on_time"
       }
     },
     {
       "id": "03bf5ad35daf",
       "name": "BNBbaby pool open check",
-      "prompt": "Kamu Pierre, asisten Web3 milik Ruzena. Tugas: cek status pool BNBbaby tepat setelah jam buka pool, lalu lapor dalam bahasa Indonesia santai, TANPA em dash, ringkas dan pakai angka.\n\nAlamat penting (BNB Smart Chain, chainId 56):\n- Mint contract: 0xBB7eD59ca41eA03cf20084a8c9de94244B7B2637\n- Token BNBbaby: 0xD0079025a9Bb66a7a1de991De2E4326FABA35729\n- Pair PancakeSwap V2 (token0=USDT, token1=BNBbaby): 0xdFC45087559a54934Dbc9ff5eA19457912D21C7b\n- USDT BSC: 0x55d398326f99059fF775485246999027B3197955\n- Wallet Agentic (pemilik token): 0x74624463e902C11aB37C0034EB216A2B4466269F\n- Deadline buka pool: 2026-11-04 19:29 WIB (pool bisa dibuka siapa saja via openPool() kalau belum penuh)\n\nLangkah (pakai curl ke RPC publik, contoh https://bsc-dataseed.binance.org, fallback https://bsc-rpc.publicnode.com):\n1. poolOpen() selector 0x6c1fc9c5 pada mint contract. Kalau masih 0, cek apakah block.timestamp sudah lewat deadline() 0x29dcb0cf. Laporkan bahwa pool BELUM dibuka dan siapa pun bisa memanggil openPool(), jangan memanggil sendiri tanpa perintah.\n2. Kalau pool sudah open: baca getReserves() 0x0902f1ac pada pair, token0() 0x0dfe1681, token1() 0xd21220a7. Hitung harga BNBbaby dalam USDT = reserveUSDT/reserveBNBbaby, dan nilai 10.000.000 token dalam USD. Laporkan juga likuiditas USDT di pool dan total supply minted (sharesMinted 0x505e05fd).\n3. Cek saldo token BNBbaby wallet 0x74624463e902C11aB37C0034EB216A2B4466269F via balanceOf 0x70a08231.\n4. Sebutkan berapa USD yang realistis bisa keluar kalau 10jt token dijual ke pool itu (hitung dengan formula constant product x*y=k, fee 0.25%), karena harga spot bukan harga jual sebenarnya.\n\nPENTING: JANGAN menjual, JANGAN swap, JANGAN tanda tangan transaksi apa pun. Tugas ini hanya lapor. Akhiri dengan satu baris rekomendasi singkat dan ingatkan Ruzena bahwa Pierre menunggu perintah untuk jual.\n\nFormat laporan: status pool, harga per token, nilai 10jt token, likuiditas USDT, estimasi USD yang benar-benar didapat kalau dijual, saldo token, rekomendasi.\n\nGAYA TAMPILAN: Gunakan format minimalis, bersih, modern, dan mewah dengan icon badge sewajarnya. Susun data angka di dalam blok kode `yaml` yang rata titik duanya (`Key : Value`) di bawah header kapital seperti `**POOL MONITOR  ·  BNBBABY**` atau `**MINT MONITOR  ·  NIULAI**` agar tidak ada teks bertumpuk.",
+      "prompt": "Kamu Pierre, asisten Web3 milik Ruzena. Tugas: cek status pool BNBbaby tepat setelah jam buka pool, lalu lapor dalam bahasa Indonesia santai, TANPA em dash, ringkas dan pakai angka.\n\nAlamat penting (BNB Smart Chain, chainId 56):\n- Mint contract: 0xBB7eD59ca41eA03cf20084a8c9de94244B7B2637\n- Token BNBbaby: 0xD0079025a9Bb66a7a1de991De2E4326FABA35729\n- Pair PancakeSwap V2 (token0=USDT, token1=BNBbaby): 0xdFC45087559a54934Dbc9ff5eA19457912D21C7b\n- USDT BSC: 0x55d398326f99059fF775485246999027B3197955\n- Wallet Agentic (pemilik token): 0x74624463e902C11aB37C0034EB216A2B4466269F\n- Deadline buka pool: 2026-11-04 19:29 WIB (pool bisa dibuka siapa saja via openPool() kalau belum penuh)\n\nLangkah (pakai curl ke RPC publik, contoh https://bsc-dataseed.binance.org, fallback https://bsc-rpc.publicnode.com):\n1. poolOpen() selector 0x6c1fc9c5 pada mint contract. Kalau masih 0, cek apakah block.timestamp sudah lewat deadline() 0x29dcb0cf. Laporkan bahwa pool BELUM dibuka dan siapa pun bisa memanggil openPool(), jangan memanggil sendiri tanpa perintah.\n2. Kalau pool sudah open: baca getReserves() 0x0902f1ac pada pair, token0() 0x0dfe1681, token1() 0xd21220a7. Hitung harga BNBbaby dalam USDT = reserveUSDT/reserveBNBbaby, dan nilai 10.000.000 token dalam USD. Laporkan juga likuiditas USDT di pool dan total supply minted (sharesMinted 0x505e05fd).\n3. Cek saldo token BNBbaby wallet 0x74624463e902C11aB37C0034EB216A2B4466269F via balanceOf 0x70a08231.\n4. Sebutkan berapa USD yang realistis bisa keluar kalau 10jt token dijual ke pool itu (hitung dengan formula constant product x*y=k, fee 0.25%), karena harga spot bukan harga jual sebenarnya.\n\nPENTING: JANGAN menjual, JANGAN swap, JANGAN tanda tangan transaksi apa pun. Tugas ini hanya lapor. Akhiri dengan satu baris rekomendasi singkat dan ingatkan Ruzena bahwa Pierre menunggu perintah untuk jual.\n\nFormat laporan: status pool, harga per token, nilai 10jt token, likuiditas USDT, estimasi USD yang benar-benar didapat kalau dijual, saldo token, rekomendasi.\n\nGAYA TAMPILAN: Gunakan format minimalis, bersih, modern, dan mewah TANPA EMOJI SAMA SEKALI. Gunakan header kapital berstruktur seperti `**POOL MONITOR  ·  BNBBABY**` atau `**MINT MONITOR  ·  NIULAI**` dan backtick `...` untuk setiap angka/alamat.",
       "skills": [],
       "skill": null,
       "model": null,
@@ -380,16 +380,16 @@
       "schedule_display": "once at 2026-11-04 19:30",
       "repeat": {
         "times": 1,
-        "completed": 0
+        "completed": 1
       },
-      "enabled": true,
-      "state": "scheduled",
+      "enabled": false,
+      "state": "completed",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-02T02:27:39.835849+07:00",
-      "next_run_at": "2026-11-04T19:30:00+07:00",
-      "last_run_at": null,
-      "last_status": null,
+      "next_run_at": null,
+      "last_run_at": "2026-11-04T19:31:46.031397+07:00",
+      "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
       "last_delivery_unverified": null,
@@ -406,12 +406,14 @@
       "enabled_toolsets": [
         "terminal"
       ],
-      "workdir": null
+      "workdir": null,
+      "run_claim": null,
+      "fire_claim": null
     },
     {
       "id": "f48e85755b63",
       "name": "BNBbaby pool price watch",
-      "prompt": "Kamu Pierre, asisten Web3 milik Ruzena. Ini pemantauan lanjutan pool BNBbaby tiap 15 menit setelah pool dibuka. Lapor dalam bahasa Indonesia santai, TANPA em dash, singkat.\n\nAlamat (BNB Smart Chain, chainId 56):\n- Mint contract: 0xBB7eD59ca41eA03cf20084a8c9de94244B7B2637\n- Token BNBbaby: 0xD0079025a9Bb66a7a1de991De2E4326FABA35729\n- Pair Pancake V2 (token0=USDT, token1=BNBbaby): 0xdFC45087559a54934Dbc9ff5eA19457912D21C7b\n- USDT BSC: 0x55d398326f99059fF775485246999027B3197955\n- Wallet: 0x74624463e902C11aB37C0034EB216A2B4466269F (hold 10.000.000 BNBbaby)\n\nAmbil data via curl ke RPC publik (https://bsc-dataseed.binance.org atau https://bsc-rpc.publicnode.com): poolOpen() 0x6c1fc9c5, getReserves() 0x0902f1ac, token0() 0x0dfe1681, token1() 0xd21220a7, balanceOf 0x70a08231 untuk saldo token.\n\nHitung: harga spot (reserveUSDT/reserveBNBbaby), nilai 10jt token dalam USD, likuiditas USDT, dan estimasi USD bersih kalau 10jt token dijual ke pool (constant product, fee 0.25 persen).\n\nBandingkan dengan laporan run sebelumnya kalau ada context: kalau harga dan likuiditas tidak berubah, cukup satu baris 'belum ada perubahan'. Kalau ada perubahan signifikan, jelaskan angkanya.\n\nPENTING: JANGAN menjual atau swap apa pun. Hanya lapor. Tutup dengan 'menunggu perintah jual dari Ruzena'.\n\nGAYA TAMPILAN: Gunakan format minimalis, bersih, modern, dan mewah dengan icon badge sewajarnya. Susun data angka di dalam blok kode `yaml` yang rata titik duanya (`Key : Value`) di bawah header kapital seperti `**POOL MONITOR  ·  BNBBABY**` atau `**MINT MONITOR  ·  NIULAI**` agar tidak ada teks bertumpuk.",
+      "prompt": "Kamu Pierre, asisten Web3 milik Ruzena. Ini pemantauan lanjutan pool BNBbaby tiap 15 menit setelah pool dibuka. Lapor dalam bahasa Indonesia santai, TANPA em dash, singkat.\n\nAlamat (BNB Smart Chain, chainId 56):\n- Mint contract: 0xBB7eD59ca41eA03cf20084a8c9de94244B7B2637\n- Token BNBbaby: 0xD0079025a9Bb66a7a1de991De2E4326FABA35729\n- Pair Pancake V2 (token0=USDT, token1=BNBbaby): 0xdFC45087559a54934Dbc9ff5eA19457912D21C7b\n- USDT BSC: 0x55d398326f99059fF775485246999027B3197955\n- Wallet: 0x74624463e902C11aB37C0034EB216A2B4466269F (hold 10.000.000 BNBbaby)\n\nAmbil data via curl ke RPC publik (https://bsc-dataseed.binance.org atau https://bsc-rpc.publicnode.com): poolOpen() 0x6c1fc9c5, getReserves() 0x0902f1ac, token0() 0x0dfe1681, token1() 0xd21220a7, balanceOf 0x70a08231 untuk saldo token.\n\nHitung: harga spot (reserveUSDT/reserveBNBbaby), nilai 10jt token dalam USD, likuiditas USDT, dan estimasi USD bersih kalau 10jt token dijual ke pool (constant product, fee 0.25 persen).\n\nBandingkan dengan laporan run sebelumnya kalau ada context: kalau harga dan likuiditas tidak berubah, cukup satu baris 'belum ada perubahan'. Kalau ada perubahan signifikan, jelaskan angkanya.\n\nPENTING: JANGAN menjual atau swap apa pun. Hanya lapor. Tutup dengan 'menunggu perintah jual dari Ruzena'.\n\nGAYA TAMPILAN: Gunakan format minimalis, bersih, modern, dan mewah TANPA EMOJI SAMA SEKALI. Gunakan header kapital berstruktur seperti `**POOL MONITOR  ·  BNBBABY**` atau `**MINT MONITOR  ·  NIULAI**` dan backtick `...` untuk setiap angka/alamat.",
       "skills": [],
       "skill": null,
       "model": null,
@@ -433,16 +435,16 @@
       "schedule_display": "*/15 20-21 4 11 *",
       "repeat": {
         "times": 8,
-        "completed": 0
+        "completed": 8
       },
-      "enabled": true,
-      "state": "scheduled",
+      "enabled": false,
+      "state": "completed",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-02T02:27:47.061371+07:00",
-      "next_run_at": "2026-11-04T20:00:00+07:00",
-      "last_run_at": null,
-      "last_status": null,
+      "next_run_at": null,
+      "last_run_at": "2026-11-04T21:46:24.907589+07:00",
+      "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
       "last_delivery_unverified": null,
@@ -459,12 +461,19 @@
       "enabled_toolsets": [
         "terminal"
       ],
-      "workdir": null
+      "workdir": null,
+      "last_dispatch": {
+        "scheduled_at": "2026-11-04T21:45:00+07:00",
+        "dispatched_at": "2026-11-04T21:45:57.161980+07:00",
+        "lateness_seconds": 57.2,
+        "kind": "on_time"
+      },
+      "fire_claim": null
     },
     {
       "id": "71b4f80dca00",
       "name": "NIULAI refund watch (4 Nov)",
-      "prompt": "Report-only watch on the NIULAI fair-mint on BSC. Do NOT sign or send any transaction. Chain read only.\n\nUse python3 with requests (already installed) and do the RPC calls against https://rpc-bsc.48.club (header User-Agent: Mozilla/5.0), eth_call on:\n- contract 0x15e47c22df42D94Fa2f0aD078Fec5Bea6453d5cF: phase(), sold(), freeClaimed(), deadline(), launched(), userInfo(0x74624463e902C11aB37C0034EB216A2B4466269F)\n- WBNB 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c balanceOf(contract), and native balance via eth_getBalance for 0x74624463e902C11aB37C0034EB216A2B4466269F\nCompute selectors with Crypto.Hash.keccak (NOT hashlib sha3). phase enum: 0 Pending, 1 Minting, 2 AwaitingLaunch, 3 Trading, 4 Refunds. userInfo returns 7 words: id, remaining, freeClaimed, paidShares, bonus, referrer, balance (token balance, 18 decimals).\n\nContext: Ruzena minted exactly 1 paid share (0.002 BNB) at block 131112467 from wallet 0x74624463e902C11aB37C0034EB216A2B4466269F, tx 0x4066a17821409d56b1b98718f648f2fa16129c81a50d4dfc54ba88d79b4e7692. Tokens are locked until the pool launches. maxShares 10000, price 0.002 BNB, refundBps 8000.\n\nReport in casual Indonesian, no em dashes, short Discord-friendly bullets:\n1. Current phase and sold/10000, plus hours/minutes left or since deadline.\n2. If phase == 4 (Refunds): say refund is now open, the exact amount he gets back = paidShares * 0.002 * 0.8 BNB (and USD using the BNB price), the gas cost of calling refund(), and that executing it needs a fresh BAW QR sign-in at https://niulaiai.fun contract, offering to do the preview when he says go.\n3. If phase == 3 (Trading): say it sold out and launched, there is no refund anymore, and give the pair 0xe65cd3038c93fd6ba0c2b724d87f8f1249878129 reserves (getReserves) so he sees actual liquidity.\n4. If still phase 1 or 2: say the mint is still open or waiting to launch, with how many shares remain.\nEnd with one clear recommendation line. Never transact, never sign.\n\nGAYA TAMPILAN: Gunakan format minimalis, bersih, modern, dan mewah dengan icon badge sewajarnya. Susun data angka di dalam blok kode `yaml` yang rata titik duanya (`Key : Value`) di bawah header kapital seperti `**POOL MONITOR  ·  BNBBABY**` atau `**MINT MONITOR  ·  NIULAI**` agar tidak ada teks bertumpuk.",
+      "prompt": "Report-only watch on the NIULAI fair-mint on BSC. Do NOT sign or send any transaction. Chain read only.\n\nUse python3 with requests (already installed) and do the RPC calls against https://rpc-bsc.48.club (header User-Agent: Mozilla/5.0), eth_call on:\n- contract 0x15e47c22df42D94Fa2f0aD078Fec5Bea6453d5cF: phase(), sold(), freeClaimed(), deadline(), launched(), userInfo(0x74624463e902C11aB37C0034EB216A2B4466269F)\n- WBNB 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c balanceOf(contract), and native balance via eth_getBalance for 0x74624463e902C11aB37C0034EB216A2B4466269F\nCompute selectors with Crypto.Hash.keccak (NOT hashlib sha3). phase enum: 0 Pending, 1 Minting, 2 AwaitingLaunch, 3 Trading, 4 Refunds. userInfo returns 7 words: id, remaining, freeClaimed, paidShares, bonus, referrer, balance (token balance, 18 decimals).\n\nContext: Ruzena minted exactly 1 paid share (0.002 BNB) at block 131112467 from wallet 0x74624463e902C11aB37C0034EB216A2B4466269F, tx 0x4066a17821409d56b1b98718f648f2fa16129c81a50d4dfc54ba88d79b4e7692. Tokens are locked until the pool launches. maxShares 10000, price 0.002 BNB, refundBps 8000.\n\nReport in casual Indonesian, no em dashes, short Discord-friendly bullets:\n1. Current phase and sold/10000, plus hours/minutes left or since deadline.\n2. If phase == 4 (Refunds): say refund is now open, the exact amount he gets back = paidShares * 0.002 * 0.8 BNB (and USD using the BNB price), the gas cost of calling refund(), and that executing it needs a fresh BAW QR sign-in at https://niulaiai.fun contract, offering to do the preview when he says go.\n3. If phase == 3 (Trading): say it sold out and launched, there is no refund anymore, and give the pair 0xe65cd3038c93fd6ba0c2b724d87f8f1249878129 reserves (getReserves) so he sees actual liquidity.\n4. If still phase 1 or 2: say the mint is still open or waiting to launch, with how many shares remain.\nEnd with one clear recommendation line. Never transact, never sign.\n\nGAYA TAMPILAN: Gunakan format minimalis, bersih, modern, dan mewah TANPA EMOJI SAMA SEKALI. Gunakan header kapital berstruktur seperti `**POOL MONITOR  ·  BNBBABY**` atau `**MINT MONITOR  ·  NIULAI**` dan backtick `...` untuk setiap angka/alamat.",
       "skills": [],
       "skill": null,
       "model": null,
@@ -484,16 +493,16 @@
       "schedule_display": "once at 2026-11-04 14:15",
       "repeat": {
         "times": 1,
-        "completed": 0
+        "completed": 1
       },
-      "enabled": true,
-      "state": "scheduled",
+      "enabled": false,
+      "state": "completed",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-02T03:24:42.241818+07:00",
-      "next_run_at": "2026-11-04T14:15:00+07:00",
-      "last_run_at": null,
-      "last_status": null,
+      "next_run_at": null,
+      "last_run_at": "2026-11-04T14:16:31.296828+07:00",
+      "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
       "last_delivery_unverified": null,
@@ -511,7 +520,9 @@
         "terminal",
         "files"
       ],
-      "workdir": null
+      "workdir": null,
+      "run_claim": null,
+      "fire_claim": null
     },
     {
       "id": "aab2824d429b",
@@ -536,15 +547,15 @@
       "schedule_display": "every 2m",
       "repeat": {
         "times": null,
-        "completed": 128
+        "completed": 2240
       },
       "enabled": true,
       "state": "scheduled",
       "paused_at": null,
       "paused_reason": null,
       "created_at": "2026-11-02T04:06:35.964171+07:00",
-      "next_run_at": "2026-11-02T10:29:35.696082+07:00",
-      "last_run_at": "2026-11-02T10:27:35.696082+07:00",
+      "next_run_at": "2026-11-06T20:59:42.288822+07:00",
+      "last_run_at": "2026-11-06T20:57:42.288822+07:00",
       "last_status": "ok",
       "last_error": null,
       "last_delivery_error": null,
@@ -564,12 +575,272 @@
       "failure_deliver": "discord:1566558388928905236",
       "fire_claim": null,
       "last_dispatch": {
-        "scheduled_at": "2026-11-02T10:26:33.118595+07:00",
-        "dispatched_at": "2026-11-02T10:27:10.407309+07:00",
-        "lateness_seconds": 37.3,
+        "scheduled_at": "2026-11-06T20:56:30.155478+07:00",
+        "dispatched_at": "2026-11-06T20:56:57.160911+07:00",
+        "lateness_seconds": 27.0,
         "kind": "on_time"
       }
+    },
+    {
+      "id": "6c0e42059730",
+      "name": "JINLONG deadline report",
+      "prompt": "no_agent script job: prints JINLONG mint deadline report from BSC",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "jinlong_deadline_report.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "once",
+        "run_at": "2026-11-04T22:00:00+07:00",
+        "display": "once at 2026-11-04 22:00"
+      },
+      "schedule_display": "once at 2026-11-04 22:00",
+      "repeat": {
+        "times": 1,
+        "completed": 1
+      },
+      "enabled": false,
+      "state": "completed",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-02T13:21:56.140645+07:00",
+      "next_run_at": null,
+      "last_run_at": "2026-11-02T13:22:02.587854+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "origin",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566697120424272033",
+        "chat_name": "Růže House / #playground / Ruzena test",
+        "thread_id": "1566697120424272033",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "fire_claim": null
+    },
+    {
+      "id": "439e39107700",
+      "name": "agc-lane-a-mint-2",
+      "prompt": "Tugas: eksekusi mint lane A kedua untuk Agentic Coin (AGC) di BSC, dari wallet agentic 0x74624463e902C11aB37C0034EB216A2B4466269F, lalu WAJIB posting alert order ke Discord #order-execution. Ini slot kuota hari UTC baru (UTC day sudah ganti jam 07:00 WIB).\n\nLATAR: mint pertama (5 share) sudah dilakukan ~02:10 WIB 3 Nov 2026 (tx 0xa79f54bc89b70c249f6486bd5fcadcbd968c3071cf8c01c9ad8c033e77b3081c, alert sudah diposting manual). Sekarang mint 5 share lagi karena kuota reset. Rencana setelahnya: 4, 3, 1 share di hari-hari berikutnya, lalu stop.\n\nKONTRAK: AGCMinter 0x6288DFe86f22B53eEB6886aE2D78941de7483743. Calldata mintFree = 0x0db5ae5a00000000000000000000000000000000000000000000000000000000000000050000000000000000000000000000000000000000000000000000000000000000. Value = 10000000000000000 wei (0.01 BNB).\n\nLANGKAH:\n1. Simulasi dulu: eth_call {\"from\": wallet, \"to\": minter, \"value\": \"0x2386f26fc10000\", \"data\": calldata} lewat RPC https://rpc-bsc.48.club. Kalau revert, decode errornya, laporkan, jangan lanjut.\n2. Cek quota wallet: eth_call quota(address,uint256) selector 0xe58f661c + pad64(wallet) + pad64(1), word 3 = aLeft. Kalau aLeft = 0 berarti kuota belum reset, laporkan dan jangan eksekusi.\n3. Cek saldo BNB wallet harus >= 0.0102 BNB. Kalau kurang, laporkan dan stop.\n4. Eksekusi via baw di ~/.hermes/web3-harness: `baw contract-call preview --binanceChainId 56 --from 0x74624463e902C11aB37C0034EB216A2B4466269F --to 0x6288DFe86f22B53eEB6886aE2D78941de7483743 --value 10000000000000000 --inputData <calldata> --json`, syarat simulationCode \"000000000\", lalu dalam 2 menit `baw contract-call execute --requestId <requestId> --json` dan pastikan BROADCASTED + txHash.\n5. Verifikasi on-chain: eth_getTransactionReceipt status 0x1, freePositionCount(wallet) jadi 2, refundOwed() naik.\n6. WAJIB posting alert ke #order-execution pakai script poster:\n   python3 ~/.hermes/scripts/order_alert.py --action MINT --chain BSC --asset \"Agentic Coin (AGC) · lane A share 2/2\" --value \"0.0100 BNB\" --contract 0x6288DFe86f22B53eEB6886aE2D78941de7483743 --tx <txHash> --source BAW_AGENTIC_WALLET_AI --note \"POSITION=5 share × base/share AGC, claim unlock 24 jam\" --note \"AGENT ID=pierre.ai → 0x74624463e902C11aB37C0034EB216A2B4466269F\" --also positions\n   Script harus keluar exit code 0 dan mencetak \"HTTP 204 delivered\". Kalau gagal, laporkan kegagalannya di laporan akhir.\n\nLAPORAN (bahasa Indonesia santai, tanpa em dash): txHash, blok, gas terpakai, status receipt, jumlah posisi sekarang, sisa saldo BNB wallet, sisa kuota aLeft, dan hasil posting alert (HTTP code per channel). Kalau ada langkah yang gagal, laporkan persis apa yang gagal dan jangan mengulang eksekusi.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "once",
+        "run_at": "2026-11-03T07:10:00+07:00",
+        "display": "once at 2026-11-03 07:10"
+      },
+      "schedule_display": "once at 2026-11-03 07:10",
+      "repeat": {
+        "times": 1,
+        "completed": 1
+      },
+      "enabled": false,
+      "state": "completed",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-03T02:03:02.961032+07:00",
+      "next_run_at": null,
+      "last_run_at": "2026-11-03T07:13:57.945701+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "origin",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566867869575417937",
+        "chat_name": "Růže House / #playground / Cek alamat pierre 0x63dea5acdbe1f27c968907d08610a5f0a0284ba6",
+        "thread_id": "1566867869575417937",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "run_claim": null,
+      "fire_claim": null
+    },
+    {
+      "id": "c81cf5a647c9",
+      "name": "agc-claim-sell-second-payout",
+      "prompt": "Tugas: claim posisi lane A KEDUA Agentic Coin (AGC, BSC) yang matang 07:12 WIB, JUAL dari wallet agentic, lalu KIRIM hasilnya ke akun Binance Ruzena. Wallet agentic 0x74624463e902C11aB37C0034EB216A2B4466269F (Agent ID pierre.ai).\n\nATURAN WAJIB:\n- Jangan mint, jangan kirim BNB ke minter, jangan cek kuota. Tidak ada posisi baru setelah ini.\n- JUAL DI WALLET AGENTIC SAJA (bukan self-custody 0xBAD577476432726C45267e2B57602dd4594a936c, jangan kirim gas/AGC ke sana).\n- Kirim ke Binance HANYA ke alamat ini, jangan pernah ganti: 0x2fd09aa52c212f60501d0094a85c4e4032d6ca2d\n\nKONTEKS: posId 1 = 5 share, mint 07:12 WIB 3 Nov → matang 07:12 WIB 4 Nov. posId 0 sudah dijual job jam 02:07 (refund 0.009979833 + hasil jual 0.006139521 BNB). Saldo wallet agentic sebelum job ini sekitar 0.02507 BNB.\n\nALAT:\n- AGCMinter 0x6288DFe86f22B53eEB6886aE2D78941de7483743, token AGC 0x63dea5aCdbE1F27c968907D08610A5f0A0284bA6, Router PancakeSwap V2 0x10ED43C718714eb63d5aA57B78B54704E256024E\n- RPC https://rpc-bsc.48.club, perintah baw dari direktori ~/.hermes/web3-harness\n- Poster alert: python3 ~/.hermes/scripts/order_alert.py\n- Generator calldata: node ~/.hermes/scripts/agc_swap_calldata.mjs --amount <AGC> --wallet 0x74624463e902C11aB37C0034EB216A2B4466269F --slippage-bps 600\n- Cek harga/likuiditas + harga BNB: python3 ~/.hermes/scripts/agc_price.py (baris BNB $x muncul di output kalau pair WBNB/USDT kebaca)\n\nLANGKAH 1 - claim:\na. Cek pending(address) selector 0x5eebea20 + pad64(wallet): word 0 = freeBnb, word 1 = freeAgc. Kalau keduanya 0, lanjut cek balanceOf AGC wallet; kalau saldo AGC juga 0 maka laporkan dan BERHENTI.\nb. Simulasi eth_call dari wallet ke minter, data claimFree 0x73fc9ccc00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000, value 0.\nc. Eksekusi: baw contract-call preview --binanceChainId 56 --from 0x74624463e902C11aB37C0034EB216A2B4466269F --to 0x6288DFe86f22B53eEB6886aE2D78941de7483743 --value 0 --inputData <data> --json (syarat simulationCode \"000000000\"), lalu baw contract-call execute --requestId <requestId> --json sampai BROADCASTED + txHash.\nd. Verifikasi receipt status 0x1, baca balanceOf AGC wallet dan catat jumlah pastinya.\ne. Post alert: python3 ~/.hermes/scripts/order_alert.py --action CLAIM --chain BSC --asset \"Agentic Coin (AGC) · posId 1 (posisi kedua, exit terakhir)\" --value \"<AGC diterima> AGC\" --contract 0x63dea5aCdbE1F27c968907D08610A5f0A0284bA6 --tx <txHash> --source BAW_AGENTIC_WALLET_AI --note \"REFUND=0.01 BNB kembali\"\n\nLANGKAH 2 - jual dari wallet agentic (approve lalu swap, value 0 semua):\na. Generate calldata: node ~/.hermes/scripts/agc_swap_calldata.mjs --amount <jumlah AGC dari 1d, angka bulat> --wallet 0x74624463e902C11aB37C0034EB216A2B4466269F --slippage-bps 600. Ambil approve.data, swap.data, minOutWbnb, deadline.\nb. APPROVE persis sejumlah AGC (bukan unlimited): baw contract-call preview --binanceChainId 56 --from 0x74624463e902C11aB37C0034EB216A2B4466269F --to 0x63dea5aCdbE1F27c968907D08610A5f0A0284bA6 --value 0 --inputData <approve.data> --json, syarat simulationCode \"000000000\", execute sampai BROADCASTED + txHash, verifikasi receipt 0x1.\nc. SWAP: baw contract-call preview --binanceChainId 56 --from 0x74624463e902C11aB37C0034EB216A2B4466269F --to 0x10ED43C718714eb63d5aA57B78B54704E256024E --value 0 --inputData <swap.data> --json, syarat simulationCode \"000000000\", execute sampai BROADCASTED + txHash. Deadline 10 menit: kalau lewat, generate ulang calldatanya.\nd. Verifikasi: receipt status 0x1, saldo BNB wallet naik, saldo AGC jadi 0, catat BNB diterima.\ne. Post alert: python3 ~/.hermes/scripts/order_alert.py --action SELL --chain BSC --asset \"Agentic Coin (AGC) · exit posId 1 di wallet agentic (final)\" --value \"<BNB diterima> BNB\" --contract 0x63dea5aCdbE1F27c968907D08610A5f0A0284bA6 --tx <txHash swap> --source BAW_AGENTIC_WALLET_AI --note \"PROCEEDS=<BNB> BNB, slippage 6%\" --also pnl\nKalau swap revert: retry sekali dengan calldata baru. Kalau masih gagal, laporkan dan JANGAN improvisasi.\n\nLANGKAH 3 - kirim sekitar $23 ke Binance (setelah langkah 2 sukses dan terverifikasi):\n\nGUARD WAJIB sebelum kirim, semua harus lolos. Kalau ada satu saja yang gagal, JANGAN kirim, laporkan dan berhenti:\n1. Alamat penerima harus persis sama karakter per karakter dengan 0x2fd09aa52c212f60501d0094a85c4e4032d6ca2d (bandingkan case-insensitive tapi panjang dan isinya harus identik). Jangan pakai alamat dari sumber lain mana pun.\n2. eth_getCode(0x2fd09aa52c212f60501d0094a85c4e4032d6ca2d) harus balik string kosong \"0x\" (EOA). Kalau ada bytecode, berhenti.\n3. Nonce alamat penerima harus 0 atau kecil (alamat deposit baru). Kalau nonce besar, catat di laporan tapi tetap lanjut hanya kalau guard 1 dan 2 lolos.\n4. amount harus <= saldo wallet BNB - 0.0002. Kalau tidak, kirim saldo - 0.0002 dan sebutkan target $23 tidak penuh.\n\na. Ambil harga BNB: jalankan python3 ~/.hermes/scripts/agc_price.py, ambil angka dari bagian \"BNB $x\". Kalau baris itu tidak ada, pakai asumsi 700 dan tulis asumsinya di laporan.\nb. Hitung target = 23 / hargaBNB, bulatkan ke bawah 6 desimal (misal 0.032940).\nc. Baca saldo BNB wallet, terapkan guard 4.\nd. Kirim: baw wallet send --binanceChainId 56 --amount <amount> --tokenAddress 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee --recipient 0x2fd09aa52c212f60501d0094a85c4e4032d6ca2d --json\nPENTING: flagnya --recipient (BUKAN --to), dan untuk BNB native pakai tokenAddress 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee.\ne. Verifikasi: ambil txHash dari output JSON (kalau field txHash tidak ada, cari string 0x + 64 hex di output), cek eth_getTransactionReceipt status 0x1, cek saldo wallet turun sesuai DAN saldo penerima naik minimal sebesar amount.\nf. Post alert: python3 ~/.hermes/scripts/order_alert.py --action TRANSFER --chain BSC --asset \"BNB ke Binance (payout hasil AGC)\" --value \"<amount> BNB\" --contract 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee --tx <txHash> --source BAW_AGENTIC_WALLET_AI --note \"PENERIMA=0x2fd09aa52c212f60501d0094a85c4e4032d6ca2d, USD~23 di harga BNB <harga>\"\n\nKalau pengiriman gagal, JANGAN coba alamat lain dan JANGAN ubah nominal tanpa alasan, cukup laporkan.\n\nLAPORAN (bahasa Indonesia santai, tanpa em dash): per langkah tulis txHash, status, angka AGC/BNB, dan HTTP code alert. Akhir: total BNB diterima dari penjualan, jumlah BNB yang dikirim ke Binance, sisa saldo wallet agentic, hasil keempat guard, dan satu baris penegasan bahwa minting berhenti serta tidak ada posisi tersisa.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "once",
+        "run_at": "2026-11-04T07:15:00+07:00",
+        "display": "once at 2026-11-04 07:15"
+      },
+      "schedule_display": "once at 2026-11-04 07:15",
+      "repeat": {
+        "times": 1,
+        "completed": 1
+      },
+      "enabled": false,
+      "state": "completed",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-03T02:16:10.076372+07:00",
+      "next_run_at": null,
+      "last_run_at": "2026-11-04T07:18:51.447042+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "origin",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566867869575417937",
+        "chat_name": "Růže House / #playground / Cek alamat pierre 0x63dea5acdbe1f27c968907d08610a5f0a0284ba6",
+        "thread_id": "1566867869575417937",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "run_claim": null,
+      "fire_claim": null
+    },
+    {
+      "id": "066c17643030",
+      "name": "agc-claim-sell-first",
+      "prompt": "Tugas: claim posisi lane A PERTAMA Agentic Coin (AGC, BSC) yang matang 02:02 WIB, lalu JUAL LANGSUNG dari wallet agentic (BUKAN self-custody). Wallet agentic 0x74624463e902C11aB37C0034EB216A2B4466269F (Agent ID pierre.ai).\n\nATURAN DARI RUZENA (wajib):\n- Jangan mint, jangan kirim BNB ke minter, jangan sentuh kuota.\n- JUAL DI WALLET AGENTIC SAJA. Jangan pakai wallet self-custody 0xBAD577476432726C45267e2B57602dd4594a936c, jangan kirim gas ke sana, jangan transfer AGC ke sana. Alasan: hemat gas dan harga sedang turun cepat.\n\nKONTEKS: posId 0 = 5 share, minted block 131293506 (02:02 WIB 3 Nov) → matang 02:02 WIB 4 Nov, refund 0.01 BNB + 1,400,000 AGC. posId 1 (mint 07:12 WIB 3 Nov) ditangani job terpisah jam 07:15, jadi jangan paksa proses dia.\n\nALAT:\n- AGCMinter 0x6288DFe86f22B53eEB6886aE2D78941de7483743, token AGC 0x63dea5aCdbE1F27c968907D08610A5f0A0284bA6, Router PancakeSwap V2 0x10ED43C718714eb63d5aA57B78B54704E256024E\n- RPC https://rpc-bsc.48.club, semua perintah baw dari direktori ~/.hermes/web3-harness\n- Poster alert: python3 ~/.hermes/scripts/order_alert.py\n- Generator calldata: node ~/.hermes/scripts/agc_swap_calldata.mjs --amount <AGC> --wallet 0x74624463e902C11aB37C0034EB216A2B4466269F --slippage-bps 600\n\nLANGKAH 1 - claim:\na. Cek pending(address) selector 0x5eebea20 + pad64(wallet): word 0 = freeBnb, word 1 = freeAgc. Kalau dua-duanya 0, laporkan belum matang dan BERHENTI.\nb. Simulasi eth_call dari wallet ke minter, data claimFree 0x73fc9ccc00000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000, value 0. Catatan: kalau belum ada yang matang, kontrak return tanpa efek (count 0), jadi cek pending dulu sebelum menilai gagal.\nc. Eksekusi: baw contract-call preview --binanceChainId 56 --from 0x74624463e902C11aB37C0034EB216A2B4466269F --to 0x6288DFe86f22B53eEB6886aE2D78941de7483743 --value 0 --inputData <data> --json (syarat simulationCode \"000000000\"), lalu baw contract-call execute --requestId <requestId> --json sampai BROADCASTED + txHash.\nd. Verifikasi receipt status 0x1, lalu baca balanceOf AGC wallet (selector 0x70a08231 + pad64(wallet)). Catat jumlah pastinya (harusnya 1,400,000 AGC).\ne. Post alert: python3 ~/.hermes/scripts/order_alert.py --action CLAIM --chain BSC --asset \"Agentic Coin (AGC) · posId 0 (posisi pertama)\" --value \"<AGC diterima> AGC\" --contract 0x63dea5aCdbE1F27c968907D08610A5f0A0284bA6 --tx <txHash> --source BAW_AGENTIC_WALLET_AI --note \"REFUND=<BNB> BNB kembali\"\n\nLANGKAH 2 - jual dari wallet agentic (approve lalu swap, dua tx, semua value 0):\na. Generate calldata: node ~/.hermes/scripts/agc_swap_calldata.mjs --amount <jumlah AGC dari langkah 1d sebagai angka bulat> --wallet 0x74624463e902C11aB37C0034EB216A2B4466269F --slippage-bps 600. Simpan field approve.data, swap.data, minOutWbnb, deadline.\nb. APPROVE dulu (bukan unlimited, persis sejumlah AGC): baw contract-call preview --binanceChainId 56 --from 0x74624463e902C11aB37C0034EB216A2B4466269F --to 0x63dea5aCdbE1F27c968907D08610A5f0A0284bA6 --value 0 --inputData <approve.data> --json, syarat simulationCode \"000000000\", lalu execute sampai BROADCASTED + txHash, verifikasi receipt status 0x1, lalu cek allowance (selector 0xdd62ed3e + pad64(wallet) + pad64(router)) minimal sama dengan jumlah AGC.\nc. SWAP: baw contract-call preview --binanceChainId 56 --from 0x74624463e902C11aB37C0034EB216A2B4466269F --to 0x10ED43C718714eb63d5aA57B78B54704E256024E --value 0 --inputData <swap.data> --json, syarat simulationCode \"000000000\", lalu execute sampai BROADCASTED + txHash. Deadline di calldata berlaku 10 menit: kalau lebih dari itu sejak generate, generate ulang calldatanya.\nd. Verifikasi: receipt status 0x1, saldo BNB wallet agentic naik, saldo AGC jadi 0, dan catat BNB yang diterima (selisih saldo sebelum dan sesudah, sudah termasuk gas).\ne. Post alert: python3 ~/.hermes/scripts/order_alert.py --action SELL --chain BSC --asset \"Agentic Coin (AGC) · exit posId 0 di wallet agentic\" --value \"<BNB diterima> BNB\" --contract 0x63dea5aCdbE1F27c968907D08610A5f0A0284bA6 --tx <txHash swap> --source BAW_AGENTIC_WALLET_AI --note \"PROCEEDS=<BNB> BNB, slippage 6%\" --also pnl\n\nKalau swap revert: retry sekali dengan calldata baru (generate ulang supaya deadline dan minOut segar). Kalau masih gagal, laporkan dan JANGAN improvisasi, JANGAN pindah ke self-custody.\n\nLAPORAN (bahasa Indonesia santai, tanpa em dash): per langkah tulis txHash, status, angka AGC/BNB, dan HTTP code alert. Akhir: total BNB yang diterima dari penjualan, saldo akhir wallet agentic, dan satu baris apakah posId 1 masih menunggu job 07:15. Kalau ada yang gagal, sebut persis langkah dan error-nya.",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": null,
+      "no_agent": false,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "once",
+        "run_at": "2026-11-04T02:07:00+07:00",
+        "display": "once at 2026-11-04 02:07"
+      },
+      "schedule_display": "once at 2026-11-04 02:07",
+      "repeat": {
+        "times": 1,
+        "completed": 1
+      },
+      "enabled": false,
+      "state": "completed",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-03T12:59:21.106936+07:00",
+      "next_run_at": null,
+      "last_run_at": "2026-11-04T02:10:31.899703+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "origin",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1566867869575417937",
+        "chat_name": "Růže House / #playground / Cek alamat pierre 0x63dea5acdbe1f27c968907d08610a5f0a0284ba6",
+        "thread_id": "1566867869575417937",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": [
+        "terminal"
+      ],
+      "workdir": null,
+      "run_claim": null,
+      "fire_claim": null
+    },
+    {
+      "id": "555572ad14d3",
+      "name": "Digital Bomb free claim 13:30 WIB",
+      "prompt": "",
+      "skills": [],
+      "skill": null,
+      "model": null,
+      "provider": null,
+      "base_url": null,
+      "script": "bomb_free_claim.py",
+      "no_agent": true,
+      "monitor_script": null,
+      "monitor_url": null,
+      "monitor_state": null,
+      "context_from": null,
+      "schedule": {
+        "kind": "once",
+        "run_at": "2026-11-04T13:29:00+07:00",
+        "display": "once at 2026-11-04 13:29"
+      },
+      "schedule_display": "once at 2026-11-04 13:29",
+      "repeat": {
+        "times": 1,
+        "completed": 1
+      },
+      "enabled": false,
+      "state": "completed",
+      "paused_at": null,
+      "paused_reason": null,
+      "created_at": "2026-11-04T10:11:14.481794+07:00",
+      "next_run_at": null,
+      "last_run_at": "2026-11-04T13:30:05.439779+07:00",
+      "last_status": "ok",
+      "last_error": null,
+      "last_delivery_error": null,
+      "last_delivery_unverified": null,
+      "failure_streak": 0,
+      "deliver": "origin",
+      "origin": {
+        "platform": "discord",
+        "chat_id": "1567374063196831765",
+        "chat_name": "Růže House / #playground / Hermes",
+        "thread_id": "1567374063196831765",
+        "user_id": "365422375694761984",
+        "scope_id": "872018382441033778"
+      },
+      "enabled_toolsets": null,
+      "workdir": null,
+      "run_claim": null,
+      "fire_claim": null
     }
   ],
-  "updated_at": "2026-11-02T03:32:02.109Z"
+  "updated_at": "2026-11-06T20:57:58.436836+07:00"
 }

@@ -74,6 +74,24 @@ When `watcher.ts` wakes you with a JSON payload containing `"trigger_type": "TRA
 
 ---
 
+## Order Alert Routing (mandatory for every execution)
+
+Every order Pierre executes must announce itself in `#order-execution`. An order that ran but never posted is an unlogged order, so treat the alert as part of the execution, not as a report about it.
+
+- **Through the harness MCP tools** (`execute_signed_tx`, `execute_autonomous_sell`, `execute_baw_agentic_trade`): `webhook.ts::broadcastToDiscord` already posts to `#order-execution`, then routes `BUY`/`MINT` to `#positions` and sells to `#positions` + `#pnl`. Pass the real action to `simulate_and_prepare_tx` (the enum accepts `BUY, MINT, CLAIM, SELL, AUTO_SELL, EMERGENCY_SELL, TRANSFER, SWAP, APPROVE, LP_ADD, LP_REMOVE, CONTRACT_CALL`) so the label is right; the harness trades only what was staged.
+- **Outside the MCP** (direct `baw contract-call`, viem probe scripts, cron jobs, manual claims/sells/transfers): nothing broadcasts, so call the standalone poster yourself:
+
+```
+python3 ~/.hermes/scripts/order_alert.py --action MINT --chain BSC \
+  --asset "Agentic Coin (AGC) · lane A share 1/2" --value "0.0100 BNB" \
+  --contract 0x... --tx 0x... --source BAW_AGENTIC_WALLET_AI \
+  --note "POSITION=5 share = 1,400,000 AGC" --also positions
+```
+
+- `--action` picks the colour (`MINT` champagne, `CLAIM` emerald, `TRANSFER` blue, `SWAP` violet, `SELL`/`AUTO_SELL` champagne, `EMERGENCY_SELL` crimson, `APPROVE`/`CONTRACT_CALL` slate); `--also positions,pnl` mirrors the harness routing. `--dry-run` prints the embed, `--check` prints which webhooks resolved without posting.
+- Exit code 0 with `HTTP 204` per channel is success. Discord returns 204 on a webhook post; Python `urllib` gets blocked with Cloudflare `error code: 1010`, so the script posts via `curl` with a browser UA. A failed post exits 1 so a cron job surfaces it instead of silently going quiet.
+- `COLORS` in `order_alert.py` mirrors `ACTION_COLORS` in `~/.hermes/web3-harness/src/webhook.ts`. Change both together, and remember the harness picks its copy up only when the MCP server respawns.
+
 ## 4. OpenSea API Key Hygiene
 
 * `OPENSEA_API_KEY` lives in `~/.hermes/web3-harness/.env` (mode 600). `marketplace.ts` re-reads the file on every call, so a key edit takes effect without restarting the gateway or the MCP server.
@@ -85,6 +103,8 @@ When `watcher.ts` wakes you with a JSON payload containing `"trigger_type": "TRA
 ## 5. Learned Patterns Log (Self-Patched by Pierre)
 
 <!-- SELF_PATCH_LOG_START -->
+* Order alert workflow: every execution must post to `#order-execution`. Standalone poster `~/.hermes/scripts/order_alert.py` (curl-based, exit 1 on failed delivery) covers direct `baw` calls, viem scripts and cron jobs; harness paths keep using `broadcastToDiscord`. Widened `TradeActionType`/`ACTION_COLORS` in `db.ts`/`webhook.ts` and the `simulate_and_prepare_tx` actionType enum from `BUY|MINT|CLAIM` to the full 12-action set.
 * Added `robinhood` (Robinhood Chain, chainId 4663) across `db.ts` normalizeChainName, `getClients`, `marketplace.ts` (OpenSea/DexScreener slug + Uniswap V2 router/WETH9), and `webhook.ts` Blockscout explorer URL. Addresses verified on-chain, not copied from blog posts.
+* PACTURE (agent-gated fair mint on BSC) exit tooling: `pacture_swap_calldata.mjs` auto-detects which PancakeSwap V2 pair exists (PACTURE/WBNB -> swapExactTokensForETH..., PACTURE/USDT -> swapExactTokensForTokens) and prints approve+swap data; `pacture_autosell.py` runs as the `systemd --user pacture-autosell.service` resident loop (cron's 1-minute floor cannot trail a 0.45s-block pool). Rules: delta = clamp(k*sigma_horizon, 8%, 35%) from the realised variance of the executable-out series, flow-based regime flip (mu = net quote inflow / quote reserve), depth guard on the quote reserve, and a time cap after pool open. `--instant-if-mult N` sells at open instead of trailing. Gate: `PairCreated`/`getPair` on the V2 factory is the only way to know the pool exists, since the token is non-transferable until sold out.
 <!-- SELF_PATCH_LOG_END -->
 

@@ -259,9 +259,19 @@ def source_flags(d, addr):
             flags[name] = m.group(1).strip()
     flags["tax_bps"] = re.findall(r"amount\s*\*\s*(\d+)\s*/\s*10_?000", main)
     flags["owner_funcs"] = re.findall(r"function\s+(\w+)\s*\([^)]*\)[^{;]*onlyOwner", main)
-    flags["has_withdraw"] = bool(re.search(r"function\s+\w*(withdraw|rescue|sweep)", main, re.I))
+    # An imported interface declares withdraw()/rescue()/sweep() and a global grep then
+    # reports an owner drain path the sale contract does not have: IWBNB.withdraw only
+    # unwraps native during refunds. Strip interface blocks first, then quote the name.
+    own_body = re.sub(r"(?ms)^interface\s+\w+[^{]*\{.*?^\}", "", main)
+    wdfuncs = [f for f in re.findall(
+        r"function\s+(\w+)\s*\([^)]*\)[^{;]*\b(?:external|public|internal|private)\b", own_body)
+        if re.search(r"withdraw|rescue|sweep", f, re.I)]
+    flags["has_withdraw"] = bool(wdfuncs)
+    if wdfuncs:
+        flags["withdraw_funcs"] = wdfuncs
+    # The same false-positive trap applies to pause flags: an imported Pausable trips it.
+    flags["has_pause"] = bool(re.search(r"function\s+\w*(pause|setPaused)\s*\(", own_body, re.I))
     flags["has_upgrade"] = bool(re.search(r"\b(upgradeTo|UUPS|Initializable|Proxy)\b", main))
-    flags["has_pause"] = "setPaused" in main or "paused" in main
     flags["mint_funcs"] = re.findall(r"function\s+(mint\w*|claimFree|forge)\s*\(", main)
     flags["lp_to_dead"] = "DEAD" in main and "pool.mint(DEAD)" in main
     flags["line_count"] = len(main.splitlines())

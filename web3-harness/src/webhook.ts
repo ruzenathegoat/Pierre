@@ -49,13 +49,21 @@ export interface PositionWebhookPayload {
   note?: string;
 }
 
-const ACTION_COLORS: Record<string, number> = {
+// Keep in sync with ~/.hermes/scripts/order_alert.py (COLORS) — the poster is what
+// out-of-MCP flows (direct `baw` calls, viem scripts, cron jobs) use to announce an order.
+export const ACTION_COLORS: Record<string, number> = {
   BUY: 0x3b82f6,            // Royal Sapphire
   MINT: 0xd4af37,           // Champagne Gold
   CLAIM: 0x10b981,          // Emerald Mint
   AUTO_SELL: 0xf59e0b,      // Amber Gold
   EMERGENCY_SELL: 0xef4444, // Crimson Rose
   SELL: 0xd4af37,           // Champagne Gold
+  TRANSFER: 0x3b82f6,       // Signal Blue
+  SWAP: 0x8b5cf6,           // Violet
+  APPROVE: 0x64748b,        // Slate
+  LP_ADD: 0x14b8a6,         // Teal
+  LP_REMOVE: 0xe11d48,      // Rose
+  CONTRACT_CALL: 0x64748b,  // Slate
 };
 
 const ACTION_ICONS: Record<string, string> = {

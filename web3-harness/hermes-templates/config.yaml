@@ -1,29 +1,39 @@
-# Model utama Pierre. Ganti cepat di VPS dengan: switch_model <openrouter|nvidia>
 model:
-  provider: openrouter
-  default: deepseek/deepseek-v4.1-flash
-  base_url: https://openrouter.ai/api/v1
+  provider: claude-subscription-directsdk-experimental
+  default: claude-sonnet-5-5[1m]
+  base_url: process://claude-subscription-directsdk-experimental
   api_mode: chat_completions
-
-# Dicoba berurutan hanya jika model utama gagal (rate-limit, 5xx, timeout, koneksi).
-# Untuk model baru nanti: tambahkan entri di sini + API key-nya di ~/.hermes/.env.
+mcp_servers:
+  viem_web3_harness:
+    command: /home/ubuntu/.nvm/versions/node/v22.23.4/bin/tsx
+    args:
+      - /home/ubuntu/.hermes/web3-harness/src/mcp-server.ts
+    env:
+      NODE_NO_WARNINGS: '1'
+_config_version: 46
+onboarding:
+  seen:
+    tool_progress_prompt: true
+    busy_input_prompt: true
+platforms:
+  discord:
+    enabled: true
+    home_channel:
+      platform: discord
+      chat_id: '1566495965429629100'
+      name: '#pierre'
+      user_id: '365422375694761984'
+      scope_id: '872018382441033778'
 fallback_providers:
   - provider: nvidia
     model: deepseek-ai/deepseek-v4.1-flash
     base_url: https://integrate.api.nvidia.com/v1
     api_mode: chat_completions
-
-# Batas tunggu per provider agar provider yang lambat tidak menggantung lama.
 providers:
   nvidia:
     request_timeout_seconds: 60
     stale_timeout_seconds: 60
-
-mcp_servers:
-  viem_web3_harness:
-    command: "tsx"
-    args:
-      - "/home/ubuntu/.hermes/web3-harness/src/mcp-server.ts"
-    env:
-      NODE_NO_WARNINGS: "1"
-
+plugins:
+  enabled:
+    - claude-subscription-directsdk-experimental
+  disabled: []

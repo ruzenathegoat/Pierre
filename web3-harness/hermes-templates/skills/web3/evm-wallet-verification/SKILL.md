@@ -60,6 +60,27 @@ Answers "is this private key actually wired up, and does the wallet hold anythin
 
 When the configured URL fails, back the file up (`cp .env .env.bak.$(date +%Y%m%d%H%M)`), swap in a working URL, rerun the probe, and tell the user a restart is still pending.
 
+**Log queries are capped per endpoint.** Public BSC endpoints reject `eth_getLogs` wider than 5000 blocks with `exceed maximum block range: 5000`; chunk the range into windows of 5000 blocks or fewer and sum the hits. The failure of one wide query reads exactly like "no events found", so never treat that error as evidence the event does not exist — read the JSON-RPC `error` field before concluding anything.
+
+## Proving an execution landed on chain
+
+"Did my mint/claim/swap actually go through?" is answered from chain state, never from the caller's own success status. A scheduler reporting `ok`, or a CLI printing `BROADCASTED`, proves only that a call was made.
+
+1. **Read the contract's own counters for the wallet** — open position count, matured/pending amounts, per-day quota used. A counter that did not move means the transaction did not count. Zeros in a maturity-gated field are expected before the lock expires, so read the lock rule before calling them a failure.
+2. **Enumerate the action event filtered by the wallet** (`topics: [<topic0>, pad32(address)]`), chunked to the endpoint's block cap, and decode the amounts plus the block timestamp. That event list, not the wrapper's summary, is what you quote back.
+3. **Cross-check the native balance.** A refundable deposit or a fee only leaves the wallet when the transaction executed, so an unchanged balance after a reported success means it never landed.
+
+   For the agentic wallet, `baw wallet tx-history --binanceChainId 56 --json` is the fastest route to the numbers: each entry carries its `txType` plus `instructions.send` / `instructions.receive` amounts and `networkFee.feeValue` in wei, so a past swap's proceeds and every tx fee can be quoted without an archive node. It also gives the negative proof — when the history holds no `send` entry for the payout and the wallet's nonce stopped at the last action, the transfer step never ran, regardless of the job's `last_status`.
+4. **Say which step is unverified.** When the chain disagrees with the report, report the execution as failed and name the step that did not happen, rather than restating the wrapper's claim.
+5. **An unsigned path can still be validated.** Encode the calldata and `eth_call` it from an address that holds the asset: a decoded revert reason (e.g. `TransferHelper: TRANSFER_FROM_FAILED` for a missing allowance) proves the calldata decoded, while a bare `0x` revert means the selector or encoding is wrong. Say plainly that the signed transaction remains unproven.
+
+- **A zero balance plus a burn is a refund, not a DEX sale.** When the asset is gone and there is no sell transaction, check for a `Transfer` log with the wallet in `topics[1]` and the zero address in `topics[2]`: a burn to `0x0` plus the contract's own share counter (`paidShares(address)`, `userInfo(address)`) dropping to `0` plus a native-balance delta matching the stated refund (`paidShares * price * refundBps/10000` minus gas) is a contract-level refund. Report it as such; a DEX sale would show the tokens going to a pair/router address instead.
+- **Predicted amount versus observed delta.** Compute the expected native delta before reading the balance, then compare. The prediction landing within gas noise is what turns "the tokens are gone" into "the refund executed".
+
+ABI fragment, the chunked scan, the viem padding pitfall and the swap pre-validation recipe: `references/onchain-execution-verification.md`.
+
+When the exit came from outside the harness (refund, burn, manual transfer), the local position book still says OPEN and a reporter keeps re-posting the dead row. Reconciliation procedure: `references/position-state-reconciliation.md`.
+
 ## API-key-backed data feeds (orderbook, marketplace, price APIs)
 
 "Connected?" questions about a data API are answered with a live request, not by reading the env file. An env line can exist with an empty value, and a wrapper can silently swallow a failed call. Probe in this order and never report a feed as connected until step 3 passes:
@@ -70,7 +91,8 @@ When the configured URL fails, back the file up (`cp .env .env.bak.$(date +%Y%m%
 
 Pitfalls:
 - **A zeroed payload is usually a failed fetch, not an empty market.** Wrappers that fall back keep the schema intact, so `floorPrice: 0`, `bestBid: 0`, `top3: []` all look like valid data. Always read the provenance field before quoting numbers, and say "data unavailable" when the source is a fallback. Check the request before the credentials: the same fallback appears when the contract is not indexed on the chain you asked for (an Ethereum collection queried with `chain="base"`), and wrong-chain is indistinguishable from dead-feed in the payload.
-- **Free-tier key auto-provisioning is rate limited per IP.** `429 ... Maximum N keys per day` means this host's quota is spent; do not retry in a loop. Report the limit, then offer the manual key path or a wait for the daily reset.
+- **Free-tier key auto-provisioning is rate limited per IP, and the window is rolling.** `429 ... Maximum N keys per day` means this host's quota is spent; do not retry in a loop. Do not promise "resets at 00:00 UTC" either: a host that minted two keys late in the previous UTC day still gets 429 well after that boundary. Bound the wait from the last successful mint (roughly 24h from there) and label it an estimate.
+- **Rotation status comes from the watchdog's state file, not from job status.** The state (`~/.hermes/web3-harness/.opensea-key-state.json`) must carry the current key's fingerprint and `expires_at`. A file with only `updated_at` means the watchdog never minted anything, so the live key came from somewhere else, its expiry is unknown, and nothing is rotating. Confirm with a direct `POST /api/v2/auth/keys` and report the status code: `429` = quota blocked, `200` = mint now and write it through the same path the harness reads.
 - **Re-verify through the tool after adding a key.** Long-lived MCP/tsx servers keep the environment they started with, so a rebuilt `.env` may need a restart before the tool itself sees the key. The durable fix is to re-read the env file inside the key getter on every call (parse `^OPENSEA_API_KEY=(.*)$` from disk, fall back to `process.env`), so key rotation never needs a restart; ship that change and only restarts for code changes remain.
 - **Install the new key before revoking the old one.** Rotation order is: create new key, write it to `.env`, verify `2xx` plus a live tool call, then revoke the old key at the provider. Reversed, the feed goes dead in the gap and the failure looks like a config bug.
 - **Separate feeds fail separately.** In one orderbook tool, NFT data can be dead while the token/DEX feed (different provider) is healthy. Scope the warning: "NFT preview unavailable, token preview still live" beats a blanket "API down".

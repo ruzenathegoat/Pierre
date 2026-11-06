@@ -322,7 +322,22 @@ server.registerTool(
       contractAddress: z.string().describe('Target contract address (0x...)'),
       calldata: z.string().describe('Hex encoded calldata (0x...)'),
       valueEth: z.string().describe('Native currency value to send (in ETH or BNB, e.g. "0.01")'),
-      actionType: z.enum(['BUY', 'MINT', 'CLAIM']).describe('Transaction action type'),
+      actionType: z
+        .enum([
+          'BUY',
+          'MINT',
+          'CLAIM',
+          'SELL',
+          'AUTO_SELL',
+          'EMERGENCY_SELL',
+          'TRANSFER',
+          'SWAP',
+          'APPROVE',
+          'LP_ADD',
+          'LP_REMOVE',
+          'CONTRACT_CALL',
+        ])
+        .describe('Transaction action type'),
       assetName: z.string().describe('Human-readable asset or collection name'),
       sourceUrl: z.string().describe('Source marketplace or mint URL provided by user'),
       tokenId: z

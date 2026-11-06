@@ -17,6 +17,7 @@ sqlite3 ~/.hermes/cron/executions.db \
 - `delivery_outcome='suppressed'` + `status='completed'` = the script printed nothing. The job is healthy; the condition never fired or the dedupe swallowed it.
 - `delivery_outcome='delivered'` + `status='failed'` = the text went out on the failure channel; read `error`.
 - `select min(started_at), count(*)` for the same job tells you whether it has only ever run since a rewrite (a short history explains "only one message ever").
+- **`suppressed` on every run while the state file's `alerts` keys keep advancing = the job posts itself through a webhook, and its stdout is empty by design.** Do not report "nothing was sent": those messages reached the channel under the webhook's own username, so they carry no `Cronjob Response:` header and leave no row in `executions`/`deliveries`. Confirm the destination without posting by GETting the webhook URL from the job's env file (`curl -s <url>`), which returns its `name`, `channel_id` and `guild_id`. This is also the usual explanation for "alerts stopped appearing" right after the script gained a webhook path.
 
 ## 2. Did the process produce stdout?
 
@@ -29,6 +30,8 @@ sqlite3 ~/.hermes/cron/executions.db \
 | message body below `---` | This is what was delivered. Diff its wording against the current script's f-strings. |
 
 A message whose format does not match any string in the current script came from an **older version** of the script. Say that explicitly instead of hunting a bug in code that never produced it.
+
+Assume nothing about the script from memory: read `ls -l` mtime and `grep -n '<filter markers>' <script>` before reasoning about its filters. Long-lived alert scripts get edited between sessions (embeds added, webhook path added, filters renamed), and diagnosing from the filter names you patched last time sends you hunting code that no longer exists.
 
 ## 3. Did the dedupe burn the alert?
 

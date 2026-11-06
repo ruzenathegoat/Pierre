@@ -58,7 +58,19 @@ db.exec(`
 
 export type ChainName = 'base' | 'ethereum' | 'bsc' | 'robinhood';
 export type AssetType = 'ERC721' | 'ERC1155' | 'ERC20';
-export type TradeActionType = 'BUY' | 'MINT' | 'CLAIM' | 'AUTO_SELL' | 'EMERGENCY_SELL';
+export type TradeActionType =
+  | 'BUY'
+  | 'MINT'
+  | 'CLAIM'
+  | 'AUTO_SELL'
+  | 'EMERGENCY_SELL'
+  | 'SELL'
+  | 'TRANSFER'
+  | 'SWAP'
+  | 'APPROVE'
+  | 'LP_ADD'
+  | 'LP_REMOVE'
+  | 'CONTRACT_CALL';
 
 export function normalizeChainName(chain: string): ChainName {
   const c = chain.trim().toLowerCase();
