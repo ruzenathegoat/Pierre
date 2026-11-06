@@ -80,11 +80,10 @@ jobs:
             # Restart hanya proses pm2 yang memang sudah terdaftar.
             # hermes-discord sengaja TIDAK disentuh: gateway jalan via systemd (hermes-gateway.service).
             for app in price-watcher baw-keepalive; do
-              if pm2 describe "$app" >/dev/null 2>&1; then
+              if grep -q "\"name\":\"$app\"" "$HOME/.pm2/dump.pm2" 2>/dev/null; then
                 pm2 restart "$app" || echo "restart $app gagal"
               else
                 echo "pm2 app $app belum terdaftar, dilewati"
               fi
             done
-            pm2 save >/dev/null 2>&1 || true
             echo "== deploy selesai =="
