@@ -76,13 +76,15 @@ jobs:
             cd "$DEST"
             npm ci --omit=dev
 
+            echo "== restart services =="
             # Restart hanya proses pm2 yang memang sudah terdaftar.
             # hermes-discord sengaja TIDAK disentuh: gateway jalan via systemd (hermes-gateway.service).
             for app in price-watcher baw-keepalive; do
               if pm2 describe "$app" >/dev/null 2>&1; then
-                pm2 restart "$app"
+                pm2 restart "$app" || echo "restart $app gagal"
               else
                 echo "pm2 app $app belum terdaftar, dilewati"
               fi
             done
-            pm2 save || true
+            pm2 save >/dev/null 2>&1 || true
+            echo "== deploy selesai =="
