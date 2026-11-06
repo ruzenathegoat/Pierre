@@ -51,9 +51,10 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script_stop: true
           script: |
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-            [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
+            # Pakai node dari nvm lewat PATH langsung (nvm.sh bentrok dengan prefix di ~/.npmrc)
+            NODE_BIN="$(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V | tail -1)"
+            export PATH="$NODE_BIN:$HOME/.npm-global/bin:$HOME/.local/bin:$PATH"
+            node -v && npm -v
 
             SRC="$HOME/.hermes/deploy-src"
             DEST="$HOME/.hermes/web3-harness"
