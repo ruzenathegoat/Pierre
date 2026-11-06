@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
 
 jobs:
   validate-and-deploy:
@@ -15,7 +20,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js & Typecheck
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -24,25 +29,59 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
 
+      - name: Check deploy secrets are set
+        working-directory: .
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          for v in VPS_HOST VPS_USER VPS_SSH_KEY; do
+            if [ -z "${!v}" ]; then
+              echo "::error::Secret $v belum diisi (Settings > Secrets and variables > Actions)"
+              exit 1
+            fi
+          done
+
       - name: Deploy to Tencent Cloud Lighthouse via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
           script: |
             export NVM_DIR="$HOME/.nvm"
             [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
             [ -f "$HOME/.local/bin/env" ] && source "$HOME/.local/bin/env"
-            cd ~/.hermes/web3-harness
-            git fetch origin main
-            git reset --hard origin/main
-            if [ -d "web3-harness" ]; then
-              cd web3-harness
-            fi
-            npm ci --omit=dev
-            pm2 restart price-watcher || pm2 start ecosystem.config.cjs --only price-watcher
-            pm2 restart baw-keepalive || pm2 start ecosystem.config.cjs --only baw-keepalive
-            pm2 restart hermes-discord || pm2 start ecosystem.config.cjs --only hermes-discord
-            pm2 save
 
+            SRC="$HOME/.hermes/deploy-src"
+            DEST="$HOME/.hermes/web3-harness"
+
+            # Deploy source: clone terpisah (repo public), tidak menyentuh ~/pierre-repo
+            if [ ! -d "$SRC/.git" ]; then
+              git clone --depth 1 https://github.com/${{ github.repository }}.git "$SRC"
+            fi
+            git -C "$SRC" fetch --depth 1 origin main
+            git -C "$SRC" reset --hard origin/main
+
+            # Sync kode. Tanpa --delete, dan DB/.env/node_modules tidak disentuh.
+            mkdir -p "$DEST"
+            rsync -a \
+              --exclude '.env' --exclude '*.db' --exclude '*.db-shm' --exclude '*.db-wal' \
+              --exclude 'node_modules' \
+              "$SRC/web3-harness/" "$DEST/"
+
+            cd "$DEST"
+            npm ci --omit=dev
+
+            # Restart hanya proses pm2 yang memang sudah terdaftar.
+            # hermes-discord sengaja TIDAK disentuh: gateway jalan via systemd (hermes-gateway.service).
+            for app in price-watcher baw-keepalive; do
+              if pm2 describe "$app" >/dev/null 2>&1; then
+                pm2 restart "$app"
+              else
+                echo "pm2 app $app belum terdaftar, dilewati"
+              fi
+            done
+            pm2 save || true
