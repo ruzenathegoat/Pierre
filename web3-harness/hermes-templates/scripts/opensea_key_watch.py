@@ -30,9 +30,6 @@ ROTATE_BEFORE = timedelta(hours=48)
 TIMEOUT = 25
 
 
-OPENSEA_ICON_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
-
-
 def read_webhook_url() -> str:
     for path, keys in [
         (PIERRE_WEBHOOK_ENV, ("WEBHOOK_URL",)),
@@ -54,49 +51,31 @@ def read_webhook_url() -> str:
     return ""
 
 
-def post_watchdog_embed(
-    title: str,
-    status_tag: str,
-    description: str,
-    fields: list[dict],
-    color: int = 0xD4AF37,
-) -> int:
+def post_watchdog_embed(title: str, status_tag: str, fields: list[dict], color: int = 1973795) -> int:
     url = read_webhook_url()
     if not url:
         return 0
-    wib = timezone(timedelta(hours=7))
-    ts_wib = datetime.now(wib).strftime("%Y-%m-%d %H:%M WIB")
-    payload = {
-        "username": "Pierre  |  System Watchdog",
-        "embeds": [
-            {
-                "author": {
-                    "name": f"RŮŽE HOUSE  ·  OPENSEA WATCHDOG  ·  {status_tag}",
-                    "icon_url": OPENSEA_ICON_URL,
-                },
-                "title": title,
-                "url": "https://opensea.io/settings/developer",
-                "thumbnail": {"url": OPENSEA_ICON_URL},
-                "description": description,
-                "color": color,
-                "fields": fields,
-                "footer": {
-                    "text": f"Pierre Execution Desk  ·  API Key Watchdog  ·  {ts_wib}",
-                    "icon_url": OPENSEA_ICON_URL,
-                },
-            }
-        ],
+    clean = lambda v: str(v).replace("`", "")  # noqa: E731
+    short_f = [f for f in fields if len(clean(f["value"])) <= 60]
+    long_txt = [clean(f["value"]) for f in fields if len(clean(f["value"])) > 60]
+    desc = f"**{status_tag.title()}**" + ("\n" + "\n".join(long_txt) if long_txt else "")
+    embed = {
+        "author": {"name": "R\u016e\u017dE HOUSE"},
+        "title": title,
+        "description": desc,
+        "color": color,
+        "fields": [{"name": f["name"].title(), "value": f"`{clean(f['value'])}`", "inline": True} for f in short_f],
+        "footer": {"text": "Pierre Execution Desk  \u00b7  API key watchdog"},
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST")
-    req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "Pierre-Watchdog/1.0")
+    if "ACTION" in status_tag.upper():
+        embed["_buttons"] = [("OpenSea developer settings", "https://opensea.io/settings/developer")]
     try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            return resp.status
-    except urllib.error.HTTPError as exc:
-        return exc.code
-    except Exception:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import pierre_ui as ui
+        ok, code, _ = ui.post(url, "Pierre  |  System Watchdog", [embed], wait=False)
+        return int(code) if str(code).isdigit() else 0
+    except Exception:  # noqa: BLE001
         return 0
 
 
@@ -230,43 +209,31 @@ def main() -> int:
             if st.get("alerted_date") != date.today().isoformat():
                 state_write(alerted_date=date.today().isoformat())
                 msg = f"**SYSTEM WATCHDOG  ·  OPENSEA FEED**\nStatus: `Connection Check Failed` ({str(body)[:120]})  ·  Action: `No Change`"
-                detail_block = (
-                    f"Error Detail   :  {str(body)[:140]}\n"
-                    f"Action Taken   :  No Rotation (Retrying Next Tick)"
-                )
                 post_watchdog_embed(
                     "OpenSea v2 Feed Connection Warning",
                     "TRANSIENT WARNING",
-                    "> Transient network or Cloudflare error encountered while probing OpenSea API v2.",
                     [
-                        {"name": "FEED STATUS", "value": "`CONNECTION FAILED`", "inline": True},
-                        {"name": "KEY FINGERPRINT", "value": f"`{fp or 'n/a'}`", "inline": True},
-                        {"name": "HARNESS MODE", "value": "`Hot-Reload (.env)`", "inline": True},
-                        {"name": "DIAGNOSTIC LOG", "value": f"```yaml\n{detail_block}\n```", "inline": False},
+                        {"name": "STATUS", "value": "`Connection Check Failed`", "inline": True},
+                        {"name": "FINGERPRINT", "value": f"`{fp or 'n/a'}`", "inline": True},
+                        {"name": "DETAIL", "value": f"`{str(body)[:160]}`", "inline": False},
                     ],
-                    0xF59E0B,
+                    13082451,
                 )
                 print(msg)
             return 0
 
     if args.send_status:
         hrs = f"{round((expires - now).total_seconds() / 3600, 1)}h" if expires else "Active (HTTP 200)"
-        exp_str = st.get("expires_at") if expires else "Auto-Managed (6d Window)"
-        detail_block = (
-            f"Tracked Expiry :  {exp_str}\n"
-            f"Config Path    :  ~/.hermes/web3-harness/.env (Hot-Reload)"
-        )
         post_watchdog_embed(
             "OpenSea API v2 Key Telemetry",
             "ACTIVE",
-            "> OpenSea API v2 orderbook & Seaport fulfillment feed is authenticated and healthy.",
             [
-                {"name": "FEED STATUS", "value": f"`HTTP {status} HEALTHY`", "inline": True},
-                {"name": "KEY FINGERPRINT", "value": f"`{fp}`", "inline": True},
+                {"name": "STATUS", "value": f"`HTTP {status} (Healthy)`", "inline": True},
+                {"name": "FINGERPRINT", "value": f"`{fp}`", "inline": True},
                 {"name": "WINDOW REMAINING", "value": f"`{hrs}`", "inline": True},
-                {"name": "KEY TELEMETRY", "value": f"```yaml\n{detail_block}\n```", "inline": False},
+                {"name": "HARNESS MODE", "value": "`Hot-Reload Active (.env)`", "inline": False},
             ],
-            0x10B981,
+            1096065,
         )
         return 0
 
@@ -287,22 +254,15 @@ def main() -> int:
         new_fp = fingerprint(new_key)
         state_write(fingerprint=new_fp, expires_at=new_exp, alerted_date=None,
                     rotated_at=now.isoformat())
-        rot_block = (
-            f"Rotation Cause :  {why}\n"
-            f"New Expiry     :  {new_exp}\n"
-            f"Reload Status  :  Hot-Reload Active (.env)"
-        )
         post_watchdog_embed(
             "OpenSea API v2 Key Auto-Rotated",
             "KEY ROTATED",
-            "> Provisioned a fresh 7-day free-tier OpenSea API v2 key and hot-reloaded `.env`.",
             [
-                {"name": "ROTATION STATUS", "value": "`AUTO-ROTATED`", "inline": True},
+                {"name": "REASON", "value": f"`{why}`", "inline": True},
                 {"name": "NEW FINGERPRINT", "value": f"`{new_fp}`", "inline": True},
-                {"name": "VALIDITY WINDOW", "value": "`7 Days`", "inline": True},
-                {"name": "ROTATION LEDGER", "value": f"```yaml\n{rot_block}\n```", "inline": False},
+                {"name": "EXPIRES AT", "value": f"`{new_exp}`", "inline": False},
             ],
-            0x10B981,
+            1096065,
         )
         print(f"**SYSTEM WATCHDOG  ·  OPENSEA KEY ROTATED**\nReason: `{why}`  ·  New Expiry: `{new_exp}`  ·  Reload: `Hot-Reload Active (.env)`")
         return 0
@@ -322,22 +282,15 @@ def main() -> int:
     if st.get("alerted_date") == today:
         return 0
     state_write(alerted_date=today)
-    err_block = (
-        f"Failure Reason :  {why}\n"
-        f"Provision HTTP :  HTTP {nstatus}\n"
-        f"Remediation    :  Update OPENSEA_API_KEY in ~/.hermes/web3-harness/.env"
-    )
     post_watchdog_embed(
         "OpenSea API v2 Rotation Required",
         "ACTION REQUIRED",
-        "> Auto-provisioning a new OpenSea API key was rate-limited or blocked. Manual key update required.",
         [
-            {"name": "FEED STATUS", "value": "`ACTION REQUIRED`", "inline": True},
-            {"name": "PROVISION HTTP", "value": f"`HTTP {nstatus}`", "inline": True},
-            {"name": "KEY FINGERPRINT", "value": f"`{fp or 'n/a'}`", "inline": True},
-            {"name": "DIAGNOSTIC & REMEDIATION", "value": f"```yaml\n{err_block}\n```", "inline": False},
+            {"name": "REASON", "value": f"`{why}`", "inline": True},
+            {"name": "ROTATION HTTP", "value": f"`HTTP {nstatus}`", "inline": True},
+            {"name": "ACTION", "value": "Generate a new key at `opensea.io/settings/developer` and update `OPENSEA_API_KEY` in `~/.hermes/web3-harness/.env`.", "inline": False},
         ],
-        0xEF4444,
+        14298676,
     )
     print(f"**SYSTEM WATCHDOG  ·  OPENSEA ROTATION ERROR**\nReason: `{why}`  ·  HTTP `{nstatus}`  ·  `{str(nbody)[:180]}`")
     return 0

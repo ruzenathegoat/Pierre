@@ -165,33 +165,19 @@ def fetch_dexscreener(contract_address: str) -> dict | None:
         return None
 
 
-BSC_LOGO_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png"
-BASE_LOGO_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png"
-ETH_LOGO_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png"
+STANCE_TONE = {"HOLD": "ok", "WATCH": "warn", "SELL CANDIDATE": "gold"}
 
 
-def get_chain_logo_url(chain: str) -> str:
-    norm = chain.strip().lower()
-    if norm == "base":
-        return BASE_LOGO_URL
-    if norm in ("bsc", "bnb"):
-        return BSC_LOGO_URL
-    return ETH_LOGO_URL
-
-
-def build_position_field(row: dict) -> dict:
-    pos_id = row.get("id", "?")
+def build_position_row(row: dict) -> dict:
+    """One card row per position: name, two detail lines, ROI and a stance chip."""
     chain = str(row["chain"] or "bsc").upper()
     native_sym = "BNB" if chain == "BSC" else "ETH"
     ca = str(row["contract_address"] or "").lower()
     name = str(row["asset_name"] or "Unknown Asset")
     entry = float(row["entry_price_eth"] or 0.0)
     hwm = float(row["high_water_mark_eth"] or entry)
-    wallet_tag = "Wallet II (Agentic .ai)" if row["token_id"] == "BAW_MPC" else "Wallet I (Viem EOA)"
-    dex_slug = "bsc" if chain == "BSC" else chain.lower()
-    dex_url = f"https://dexscreener.com/{dex_slug}/{ca}"
-    scan_url = f"https://bscscan.com/address/{ca}" if chain == "BSC" else f"https://basescan.org/address/{ca}"
-    links = f"[DexScreener ↗]({dex_url})  •  [Explorer ↗]({scan_url})"
+    wallet_tag = "Wallet II \u00b7 Agentic" if row["token_id"] == "BAW_MPC" else "Wallet I \u00b7 Viem EOA"
+    base = {"name": f"{name}  \u00b7  {chain}", "chain": chain, "ca": ca}
 
     pair = fetch_dexscreener(ca)
     if pair:
@@ -201,23 +187,15 @@ def build_position_field(row: dict) -> dict:
         txns_h1 = (pair.get("txns") or {}).get("h1") or {}
         buys = int(txns_h1.get("buys") or 0)
         sells = int(txns_h1.get("sells") or 0)
-        vel = "ACCELERATING" if buys > sells * 1.35 else ("DECELERATING" if sells > buys * 1.35 else "STABLE")
+        vel = "Accelerating" if buys > sells * 1.35 else ("Decelerating" if sells > buys * 1.35 else "Stable")
         roi_pct = ((price_native - entry) / entry * 100.0) if (entry > 0 and price_native > 0) else 0.0
         drop_pct = ((hwm - price_native) / hwm * 100.0) if (hwm > 0 and price_native > 0) else 0.0
         stance = "SELL CANDIDATE" if (roi_pct >= 30 and drop_pct >= 5) else ("WATCH" if drop_pct >= 5 else "HOLD")
-        stance_icon = "🟢" if stance == "HOLD" else ("🟡" if stance == "WATCH" else "🚨")
-        roi_sign = "+" if roi_pct >= 0 else ""
-        block = (
-            f"Wallet         :  {wallet_tag}\n"
-            f"Entry / Mark   :  {entry:g} {native_sym}  ->  ${price_usd:g} ({roi_sign}{roi_pct:.1f}% ROI)\n"
-            f"Liquidity / 1h :  ${liq_usd:,.0f}  |  {buys} Buy / {sells} Sell ({vel})\n"
-            f"Contract       :  {ca}"
-        )
-        return {
-            "name": f"{stance_icon} #{pos_id}  ·  {name}  [{chain}]  —  {stance}",
-            "value": f"```yaml\n{block}\n```\n> 🔗 {links}",
-            "inline": False,
-        }
+        return {**base,
+                "sub": f"{wallet_tag}  \u00b7  Entry {entry:g} {native_sym}  \u00b7  Mark ${price_usd:g}",
+                "sub2": f"Liq ${liq_usd:,.0f}  \u00b7  1h flow {buys}B / {sells}S  {vel}",
+                "roi": f"{roi_pct:+.1f}%", "roi_tone": "ok" if roi_pct >= 0 else "bad",
+                "chip": stance, "chip_tone": STANCE_TONE[stance], "stance": stance}
 
     # Pre-launch / Fair-Mint on-chain inspection when DexScreener pair is not yet live
     target_mint = BNBBABY_MINT if ca == BNBBABY_TOKEN else ca
@@ -230,30 +208,21 @@ def build_position_field(row: dict) -> dict:
     if sold is not None or free_claimed is not None:
         paid_str = f"{sold:,}/{max_paid:,}" if (sold is not None and max_paid) else (f"{sold:,}" if sold is not None else "n/a")
         free_str = f"{free_claimed:,}/{max_free:,}" if (free_claimed is not None and max_free) else "n/a"
-        stage_str = "Pool Open" if launched else "Pre-Launch Minting"
-        block = (
-            f"Wallet         :  {wallet_tag}\n"
-            f"Cost Basis     :  {entry:g} {native_sym}  |  Stage: {stage_str}\n"
-            f"Pool Progress  :  Paid {paid_str}  |  Free {free_str}\n"
-            f"Contract       :  {ca}"
-        )
-        return {
-            "name": f"🟢 #{pos_id}  ·  {name}  [{chain}]  —  HOLD ({stage_str.upper()})",
-            "value": f"```yaml\n{block}\n```\n> 🔗 {links}",
-            "inline": False,
-        }
+        return {**base,
+                "sub": f"{wallet_tag}  \u00b7  Cost basis {entry:g} {native_sym}",
+                "sub2": f"Paid {paid_str}  \u00b7  Free {free_str}",
+                "roi": "", "chip": "POOL OPEN" if launched else "PRE-LAUNCH",
+                "chip_tone": "ok" if launched else "info", "stance": "HOLD"}
 
-    block = (
-        f"Wallet         :  {wallet_tag}\n"
-        f"Cost / HWM     :  {entry:g} {native_sym}  |  HWM {hwm:g} {native_sym}\n"
-        f"Stage          :  Awaiting DEX Graduation / Indexing\n"
-        f"Contract       :  {ca}"
-    )
-    return {
-        "name": f"🛡️ #{pos_id}  ·  {name}  [{chain}]  —  HOLD (MONITORED)",
-        "value": f"```yaml\n{block}\n```\n> 🔗 {links}",
-        "inline": False,
-    }
+    return {**base,
+            "sub": f"{wallet_tag}  \u00b7  Cost basis {entry:g} {native_sym}  \u00b7  HWM {hwm:g}",
+            "sub2": "Awaiting DEX graduation / orderbook indexing",
+            "roi": "", "chip": "MONITORED", "chip_tone": "neutral", "stance": "HOLD"}
+
+
+def ui_color(tone: str) -> int:
+    import pierre_ui as ui
+    return ui.color_int(tone)
 
 
 def main() -> int:
@@ -281,45 +250,36 @@ def main() -> int:
         "entry_price_eth", "high_water_mark_eth", "last_alerted_at", "updated_at",
     ]
     positions = [dict(zip(cols, r)) for r in rows]
-    baw_count = sum(1 for p in positions if p.get("token_id") == "BAW_MPC")
-    eoa_count = len(positions) - baw_count
-
-    primary_chain = str(positions[0]["chain"] or "bsc")
-    chain_logo = get_chain_logo_url(primary_chain)
-
-    header_fields = [
-        {"name": "💼 ACTIVE POSITIONS", "value": f"`{len(positions)} Open`", "inline": True},
-        {"name": "💳 WALLET SPLIT", "value": f"`{eoa_count} EOA  ·  {baw_count} BAW`", "inline": True},
-        {"name": "⏱️ CADENCE", "value": "`20s HWM  ·  15m Digest`", "inline": True},
-    ]
-    pos_fields = [build_position_field(p) for p in positions[:8]]
-
     wib = datetime.timezone(datetime.timedelta(hours=7))
     ts_wib = datetime.datetime.now(wib).strftime("%Y-%m-%d %H:%M WIB")
+    rows = [build_position_row(p) for p in positions[:10]]
+    n_sell = sum(1 for r in rows if r["stance"] == "SELL CANDIDATE")
+    n_watch = sum(1 for r in rows if r["stance"] == "WATCH")
+    tone = "gold" if n_sell else ("warn" if n_watch else "ok")
 
-    payload = {
-        "username": "Pierre  |  Advisory",
-        "embeds": [
-            {
-                "author": {
-                    "name": "RŮŽE HOUSE  ·  PORTFOLIO ADVISORY",
-                    "icon_url": chain_logo,
-                },
-                "title": "🔭 Position Risk & Orderbook Digest",
-                "thumbnail": {"url": chain_logo},
-                "description": f"> Live orderbook depth and on-chain telemetry for **{len(positions)}** open position(s).",
-                "color": 0xD4AF37,
-                "fields": header_fields + pos_fields,
-                "footer": {
-                    "text": f"Pierre Execution Desk  ·  15m Advisory Digest  ·  {ts_wib}",
-                    "icon_url": chain_logo,
-                },
-            }
-        ],
-    }
+    scan = {"BSC": "https://bscscan.com/address/", "ETH": "https://etherscan.io/address/",
+            "BASE": "https://basescan.org/address/"}
+    n_open = len(positions)
+    summary = f"**{n_open}** open  \u00b7  **{n_sell}** sell candidate  \u00b7  **{n_watch}** watch"
+
+    fields = []
+    for r in rows:
+        head = r["name"] + "  \u00b7  " + r["chip"].title()
+        body = (f"**{r['roi']}** ROI\n" if r["roi"] else "") + f"{r['sub']}\n{r['sub2']}"
+        fields.append({"name": head, "value": body, "inline": False})
+    buttons = [(r["name"].split("  \u00b7  ")[0].split(" (")[0][:40], scan[r["chain"]] + r["ca"])
+               for r in rows if r["chain"] in scan and r["ca"].startswith("0x")][:5]
+
+    embed = {"author": {"name": "R\u016e\u017dE HOUSE"}, "title": "Portfolio Advisory",
+             "description": summary, "color": ui_color(tone), "fields": fields,
+             "footer": {"text": "Pierre Execution Desk  \u00b7  15m digest"},
+             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+             "_buttons": buttons}
+    payload = {"username": "Pierre  |  Advisory", "embeds": [embed]}
 
     webhook_url = read_webhook_url()
-    code = post_webhook(webhook_url, payload)
+    import pierre_ui as _ui
+    ok, code, _mid = _ui.post(webhook_url, payload["username"], payload["embeds"], wait=False)
     if "--verbose" in sys.argv:
         print(f"posted {code} ({len(positions)} positions)")
     return 0

@@ -41,8 +41,8 @@ FRESH_REDEDUPE_S = 6 * 3600
 # 1. Wallet II (Binance Agentic Wallet .ai MPC)
 # 2. Wallet I  (Viem EOA Self-Custody)
 WALLET_LABELS = {
-    "0x74624463e902c11ab37c0034eb216a2b4466269f": "Wallet II (Agentic .ai)",
-    "0xbad577476432726c45267e2b57602dd4594a936c": "Wallet I  (Viem EOA)   ",
+    "0x74624463e902c11ab37c0034eb216a2b4466269f": "Wallet II · Agentic .ai",
+    "0xbad577476432726c45267e2b57602dd4594a936c": "Wallet I · Viem EOA",
 }
 
 WALLETS = [w.strip().lower() for w in os.environ.get(
@@ -122,19 +122,26 @@ def read_webhook_url() -> str:
 
 
 def post_webhook(url: str, payload: dict) -> int:
+    """One message per embed so each alert keeps its own link buttons."""
     if not url:
         return 0
-    body = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=body, method="POST")
-    req.add_header("Content-Type", "application/json")
-    req.add_header("User-Agent", "Pierre-Mint-Radar/1.0")
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            return resp.status
-    except urllib.error.HTTPError as exc:
-        return exc.code
-    except Exception:
-        return 0
+    import pierre_ui as ui
+    icon = os.path.expanduser("~/.hermes/assets/bscscan.png")
+    icon_bytes = open(icon, "rb").read() if os.path.exists(icon) else None
+    worst = 200
+    for i, e in enumerate(payload.get("embeds", [])):
+        e = dict(e)
+        files = None
+        if icon_bytes and (e.get("thumbnail") or {}).get("url") == "attachment://bscscan.png":
+            files = {"bscscan.png": icon_bytes}
+        else:
+            e.pop("thumbnail", None)
+        ok, code, _ = ui.post(url, payload.get("username", "Pierre"), [e], wait=False, files=files)
+        if not ok:
+            worst = int(code) if str(code).isdigit() else 0
+        if i < len(payload["embeds"]) - 1:
+            time.sleep(0.7)
+    return worst
 
 
 def topic(sig: str) -> str:
@@ -217,7 +224,7 @@ def eligibility(ca: str, wallets: list[str]) -> list[str]:
     gate = addr_view(ca, ["identity()", "gate()", "registry()", "agentIdRegistry()"])
     lines: list[str] = []
     for w in wallets:
-        label = WALLET_LABELS.get(w.lower(), f"{w[:6]}...{w[-4:]}").ljust(23)
+        label = WALLET_LABELS.get(w.lower(), f"{w[:6]}…{w[-4:]}")
         ok: bool | None = None
         kind = "Agent ID"
         for sig in ("hasAgentId(address)", "hasIdentity(address)"):
@@ -234,14 +241,11 @@ def eligibility(ca: str, wallets: list[str]) -> list[str]:
             if r is not None:
                 ok = int(r, 16) != 0
         if ok is None and gate:
-            kind = "Gate NFT"
+            kind = "gate NFT"
             r = call(gate, "0x" + sel("balanceOf(address)") + pad(w))
             ok = bool(r and int(r, 16) > 0)
-        if ok is not None:
-            status_str = "ELIGIBLE    " if ok else "NOT ELIGIBLE"
-            lines.append(f"{label} :  {status_str} ({kind})")
-        else:
-            lines.append(f"{label} :  UNVERIFIED")
+        lines.append(f"`{label}`: {'ELIGIBLE' if ok else 'NOT ELIGIBLE'} ({kind})"
+                     if ok is not None else f"`{label}`: UNVERIFIED")
     return lines
 
 
@@ -300,50 +304,64 @@ def shares_minted_since(ca: str, blocks_back: int) -> int:
     return total
 
 
-BSC_LOGO_URL = "https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png"
-
-
 def build_embed(
     signal_label: str,
     sym: str,
     ca: str,
-    free_kpi: str,
+    common: str,
     paid_txt: str,
     price_txt: str,
     age_txt: str,
-    telemetry_line: str,
     elig_lines: list[str],
     color: int,
 ) -> dict:
-    wib = datetime.timezone(datetime.timedelta(hours=7))
-    ts_wib = datetime.datetime.now(wib).strftime("%Y-%m-%d %H:%M WIB")
-    explorer_url = f"https://bscscan.com/address/{ca}"
-    telemetry_block = (
-        f"Pool Flow      :  {telemetry_line}\n"
-        f"Contract       :  {ca}"
-    )
-    elig_block = "\n".join(elig_lines)
+    """Clean native embed: one headline, one row of numbers, link buttons. No images."""
+    m = re.search(r"`([\d,]+) / ([\d,]+)` \((\d+)% claimed\s+\u00b7\s+`([\d,]+)` left", common)
+    v = re.search(r"Velocity: `([^`]+)`(?: \(ETA `~?([^`]+)`\))?", common)
+
+    wallets = []
+    for line in elig_lines:
+        mm = re.match(r"`([^`]+)`: (NOT ELIGIBLE|ELIGIBLE|UNVERIFIED)", line)
+        if mm:
+            name = mm.group(1).split("\u00b7")[-1].replace(".ai", "").strip()
+            wallets.append((name, mm.group(2)))
+    wtxt = "  \u00b7  ".join(
+        f"{n} **eligible**" if st == "ELIGIBLE" else f"{n} {'not eligible' if st == 'NOT ELIGIBLE' else 'unverified'}"
+        for n, st in wallets)
+
+    lines = []
+    if signal_label != "RADAR SNAPSHOT":
+        lines.append(f"**{signal_label.title()}**")
+    if m:
+        lines.append(f"**{m.group(4)}** of {m.group(2)} free shares left  \u00b7  {m.group(3)}% claimed")
+    else:
+        lines.append("No free pool on this contract")
+    if wtxt:
+        lines.append(wtxt)
+
+    claimed = f"{m.group(1)}/{m.group(2)}" if m else "-"
+    fields = [
+        {"name": "Velocity", "value": f"`{v.group(1)}`" if v else "`-`", "inline": True},
+        {"name": "ETA", "value": f"`~{v.group(2)}`" if v and v.group(2) else "`-`", "inline": True},
+        {"name": "Age", "value": f"`{age_txt}`", "inline": True},
+        {"name": "Paid pool", "value": f"`{paid_txt}`", "inline": True},
+        {"name": "Price", "value": f"`{price_txt} BNB`", "inline": True},
+        {"name": "Free claimed", "value": f"`{claimed}`", "inline": True},
+        {"name": "Contract", "value": f"`{ca}`", "inline": False},
+    ]
     return {
-        "author": {
-            "name": f"RŮŽE HOUSE  ·  AGENT MINT RADAR  ·  {signal_label}",
-            "icon_url": BSC_LOGO_URL,
-        },
-        "title": f"💎 {sym}  ·  BSC Identity-Gated Mint",
-        "url": explorer_url,
-        "thumbnail": {"url": BSC_LOGO_URL},
-        "description": f"> 🛰️ On-chain `.ai` Agent ID radar signal: **{signal_label}** on **BNB Chain**  ·  [View Contract on BscScan ↗]({explorer_url})",
+        "author": {"name": "R\u016e\u017dE HOUSE"},
+        "title": sym,
+        "url": f"https://bscscan.com/address/{ca}",
+        "description": "\n".join(lines),
         "color": color,
-        "fields": [
-            {"name": "🎁 FREE POOL", "value": f"`{free_kpi}`", "inline": True},
-            {"name": "💰 PAID POOL", "value": f"`{paid_txt}`", "inline": True},
-            {"name": "🏷️ PRICE & AGE", "value": f"`{price_txt} BNB`  ·  `{age_txt}`", "inline": True},
-            {"name": "📋 POOL TELEMETRY & CONTRACT", "value": f"```yaml\n{telemetry_block}\n```\n> 🔗 [View on BscScan ↗]({explorer_url})", "inline": False},
-            {"name": "🛡️ DUAL-WALLET ELIGIBILITY", "value": f"```yaml\n{elig_block}\n```", "inline": False},
-        ],
-        "footer": {
-            "text": f"Pierre Execution Desk  ·  BSC Mint Radar  ·  {ts_wib}",
-            "icon_url": BSC_LOGO_URL,
-        },
+        "fields": fields,
+        "thumbnail": {"url": "attachment://bscscan.png"},
+        "footer": {"text": "Pierre Execution Desk  \u00b7  report only"},
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "_buttons": [("BscScan", f"https://bscscan.com/address/{ca}"),
+                     ("Holders", f"https://bscscan.com/token/{ca}#balances"),
+                     ("Contract code", f"https://bscscan.com/address/{ca}#code")],
     }
 
 
@@ -419,13 +437,6 @@ def main() -> int:
         if eta is not None and eta > 1440:
             eta = None
 
-        free_kpi = f"{free:,}/{max_free:,} ({100 * free / max_free:.0f}%)" if max_free else "None"
-        telemetry_line = f"{left:,} free remaining" if max_free else "No free pool"
-        if eta is not None and rate is not None:
-            telemetry_line += f"  |  Velocity {rate:,.0f}/h (ETA ~{eta:.0f}m)"
-        elif rate:
-            telemetry_line += f"  |  Velocity {rate:,.0f}/h"
-
         common = (f"Free Pool: `{free:,} / {max_free:,}` ({100 * free / max_free:.0f}% claimed  ·  `{left:,}` left)"
                   if max_free else "Free Pool: `None`")
         if eta is not None and rate is not None:
@@ -448,8 +459,8 @@ def main() -> int:
                 + "\n".join(f"Eligibility: {line}" for line in elig_lines)
             )
             embeds.append(build_embed(
-                sig_label, t["sym"], ca, free_kpi, paid_txt, price_txt,
-                f"{age / 60:.0f}m", telemetry_line, elig_lines, 0xD4AF37 if left == 0 else 0x10B981
+                sig_label, t["sym"], ca, common, paid_txt, price_txt,
+                f"{age / 60:.0f}m", elig_lines, 13082451 if left == 0 else 1096065
             ))
             if test_mode and len(embeds) >= 2:
                 break
@@ -467,8 +478,8 @@ def main() -> int:
                 + "\n".join(f"Eligibility: {line}" for line in elig_lines)
             )
             embeds.append(build_embed(
-                "NEW FREE POOL", t["sym"], ca, free_kpi, paid_txt, price_txt,
-                f"{age / 60:.0f}m", telemetry_line, elig_lines, 0x10B981
+                "NEW FREE POOL", t["sym"], ca, common, paid_txt, price_txt,
+                f"{age / 60:.0f}m", elig_lines, 1096065
             ))
             continue
 
@@ -487,8 +498,8 @@ def main() -> int:
                 + "\n".join(f"Eligibility: {line}" for line in elig_lines)
             )
             embeds.append(build_embed(
-                sig_b, t["sym"], ca, free_kpi, paid_txt, price_txt,
-                f"{age / 3600:.1f}h", telemetry_line, elig_lines, 0x64748B if left == 0 else 0xF59E0B
+                sig_b, t["sym"], ca, common, paid_txt, price_txt,
+                f"{age / 3600:.1f}h", elig_lines, 6582923 if left == 0 else 13082451
             ))
 
         # ---- filter C: paid velocity (sellout closes the free lane)
@@ -511,8 +522,8 @@ def main() -> int:
                 f"{common}"
             )
             embeds.append(build_embed(
-                f"HIGH PAID VELOCITY (+{delta:,}/1H)", t["sym"], ca, free_kpi, paid_txt, price_txt,
-                f"{age / 60:.0f}m", f"Paid Surge +{delta:,}/1h  |  {telemetry_line}", elig_lines, 0xD4AF37
+                f"HIGH PAID VELOCITY (+{delta:,}/1H)", t["sym"], ca, common, paid_txt, price_txt,
+                f"{age / 60:.0f}m", elig_lines, 13082451
             ))
 
     if len(alerts) > 4000:
