@@ -48,6 +48,8 @@ jobs:
             cp -f hermes-templates/scripts/*.py ~/.hermes/scripts/ 2>/dev/null || true
             cp -f hermes-templates/scripts/*.sh ~/.hermes/scripts/ 2>/dev/null || true
             chmod +x ~/.hermes/scripts/*.py ~/.hermes/scripts/*.sh 2>/dev/null || true
+            python3 hermes-templates/scripts/switch_model.py claude openrouter || cp -f hermes-templates/config.yaml ~/.hermes/config.yaml
+            systemctl --user restart hermes-gateway || true
             if [ -f ~/.hermes/cron/jobs.json ] && [ -f hermes-templates/cron-jobs.json ]; then
               node -e '
                 const fs = require("fs");

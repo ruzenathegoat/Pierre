@@ -25,12 +25,12 @@ platforms:
       user_id: '365422375694761984'
       scope_id: '872018382441033778'
 fallback_providers:
-  - provider: nvidia
-    model: deepseek-ai/deepseek-v4.1-flash
-    base_url: https://integrate.api.nvidia.com/v1
+  - provider: openrouter
+    model: deepseek/deepseek-v4.1-flash
+    base_url: https://openrouter.ai/api/v1
     api_mode: chat_completions
 providers:
-  nvidia:
+  openrouter:
     request_timeout_seconds: 60
     stale_timeout_seconds: 60
 plugins:

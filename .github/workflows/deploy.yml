@@ -76,6 +76,12 @@ jobs:
             cd "$DEST"
             npm ci --omit=dev
 
+            # Sync switch_model.py & update fallback_providers in ~/.hermes/config.yaml
+            mkdir -p "$HOME/.hermes/scripts"
+            cp -f "$DEST/hermes-templates/scripts/switch_model.py" "$HOME/.hermes/scripts/" 2>/dev/null || true
+            chmod +x "$HOME/.hermes/scripts/switch_model.py" 2>/dev/null || true
+            python3 "$DEST/hermes-templates/scripts/switch_model.py" claude openrouter || cp -f "$DEST/hermes-templates/config.yaml" "$HOME/.hermes/config.yaml"
+
             echo "== restart services =="
             # Restart hanya proses pm2 yang memang sudah terdaftar.
             # hermes-discord sengaja TIDAK disentuh: gateway jalan via systemd (hermes-gateway.service).

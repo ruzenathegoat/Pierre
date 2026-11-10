@@ -2,9 +2,9 @@
 """switch_model — atur model utama Hermes; profil lain otomatis jadi fallback.
 
 Pemakaian:
-  switch_model openrouter          # OpenRouter utama, NVIDIA cadangan
-  switch_model nvidia              # NVIDIA utama, OpenRouter cadangan
-  switch_model openrouter nvidia   # urutan eksplisit: utama lalu fallback
+  switch_model claude              # Anthropic OAuth utama, OpenRouter cadangan
+  switch_model openrouter          # OpenRouter utama, Anthropic OAuth cadangan
+  switch_model claude openrouter   # urutan eksplisit: utama lalu fallback
   switch_model --list              # tampilkan profil yang tersedia
 
 Untuk model baru nanti: tambahkan satu entri di PROFILES (dan API key-nya di ~/.hermes/.env).
@@ -17,23 +17,23 @@ import yaml
 CONFIG = os.path.expanduser("~/.hermes/config.yaml")
 
 PROFILES = {
+    "claude": {
+        "provider": "claude-subscription-directsdk-experimental",
+        "model": "claude-sonnet-5-5[1m]",
+        "base_url": "process://claude-subscription-directsdk-experimental",
+        "api_mode": "chat_completions",
+    },
     "openrouter": {
         "provider": "openrouter",
         "model": "deepseek/deepseek-v4.1-flash",
         "base_url": "https://openrouter.ai/api/v1",
         "api_mode": "chat_completions",
     },
-    "nvidia": {
-        "provider": "nvidia",
-        "model": "deepseek-ai/deepseek-v4.1-flash",
-        "base_url": "https://integrate.api.nvidia.com/v1",
-        "api_mode": "chat_completions",
-    },
 }
 
 # Batas tunggu per provider (detik) supaya provider lambat tidak menggantung lama.
 PROVIDER_TIMEOUTS = {
-    "nvidia": {"request_timeout_seconds": 60, "stale_timeout_seconds": 60},
+    "openrouter": {"request_timeout_seconds": 60, "stale_timeout_seconds": 60},
 }
 
 
@@ -72,6 +72,7 @@ def main() -> int:
     cfg.pop("fallback_model", None)
 
     providers = cfg.setdefault("providers", {})
+    providers.pop("nvidia", None)
     for name, timeouts in PROVIDER_TIMEOUTS.items():
         providers.setdefault(name, {}).update(timeouts)
 
