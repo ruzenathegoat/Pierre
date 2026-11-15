@@ -1,8 +1,8 @@
 model:
-  provider: claude-subscription-directsdk-experimental
-  default: claude-sonnet-5-5[1m]
-  base_url: process://claude-subscription-directsdk-experimental
-  api_mode: chat_completions
+  provider: openai-codex
+  default: gpt-6-sol
+  base_url: https://chatgpt.com/backend-api/codex
+  api_mode: codex_responses
 mcp_servers:
   viem_web3_harness:
     command: /home/ubuntu/.nvm/versions/node/v22.23.4/bin/tsx
@@ -25,9 +25,9 @@ platforms:
       user_id: '365422375694761984'
       scope_id: '872018382441033778'
 fallback_providers:
-  - provider: openrouter
-    model: deepseek/deepseek-v4.1-flash
-    base_url: https://openrouter.ai/api/v1
+  - provider: claude-subscription-directsdk-experimental
+    model: claude-sonnet-5-5[1m]
+    base_url: process://claude-subscription-directsdk-experimental
     api_mode: chat_completions
 providers:
   openrouter:

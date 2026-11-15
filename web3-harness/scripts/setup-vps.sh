@@ -66,8 +66,21 @@ fi
 TSX_BIN="$(command -v tsx)"
 cat > "$HERMES_DIR/config.yaml" <<EOF
 model:
-  provider: openrouter
-  default: deepseek/deepseek-v4.1-flash-1017
+  provider: openai-codex
+  default: gpt-6-sol
+  base_url: https://chatgpt.com/backend-api/codex
+  api_mode: codex_responses
+
+fallback_providers:
+  - provider: claude-subscription-directsdk-experimental
+    model: claude-sonnet-5-5[1m]
+    base_url: process://claude-subscription-directsdk-experimental
+    api_mode: chat_completions
+
+plugins:
+  enabled:
+    - claude-subscription-directsdk-experimental
+  disabled: []
 
 mcp_servers:
   viem_web3_harness:
@@ -77,7 +90,7 @@ mcp_servers:
     env:
       NODE_NO_WARNINGS: "1"
 EOF
-echo "  -> config.yaml dikonfigurasi dengan model deepseek/deepseek-v4.1-flash-1017 & MCP path ${HARNESS_DIR}/src/mcp-server.ts"
+echo "  -> config.yaml dikonfigurasi dengan OpenAI OAuth utama, Anthropic OAuth fallback & MCP path ${HARNESS_DIR}/src/mcp-server.ts"
 
 # 6. Prepare .env files if not present
 echo "[6/6] Memeriksa file .env..."
@@ -107,7 +120,10 @@ fi
 echo ""
 echo "✅ Bootstrap Phase 5 Selesai!"
 echo "Langkah Manual Berikutnya di VPS:"
-echo "  1. Isi API Key OpenRouter & Discord Bot di: nano ~/.hermes/.env"
+echo "  1. Login OpenAI OAuth                    : hermes auth add openai-codex --type oauth"
+echo "     Pasang plugin Anthropic              : hermes plugins install claude-subscription-directsdk"
+echo "     Login Anthropic OAuth                : claude auth login"
+echo "     Isi Discord Bot di                   : nano ~/.hermes/.env"
 echo "  2. Isi Private Key & 3 Webhook Discord di : nano ~/.hermes/web3-harness/.env"
 echo "  3. Login QR Binance Agentic Wallet (.ai)  : baw auth signin"
 echo "  4. Cek tools MCP di Hermes CLI            : hermes  (lalu ketik /tools)"

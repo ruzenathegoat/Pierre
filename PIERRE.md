@@ -18,7 +18,7 @@
 
 * **Core Orchestrator:** Hermes Agent (`NousResearch/hermes-agent`)
 
-* **LLM Brain (Ultra-Low Latency & Cost):** **DeepSeek V4 Flash** via **OpenRouter API** (`deepseek/deepseek-v4-flash` / `deepseek/deepseek-v4-flash-latest`), authenticated via `OPENROUTER_API_KEY`.
+* **LLM Brain:** **OpenAI OAuth** (`openai-codex`, `gpt-6-sol`) as primary, with **Anthropic OAuth** (`claude-subscription-directsdk-experimental`, `claude-sonnet-5-5[1m]`) as the only fallback. OpenAI login uses `hermes auth add openai-codex --type oauth`; Anthropic login uses `claude auth login` through the Claude Subscription DirectSDK plugin.
 
 * **Input Gateway:** Discord Bot (`DISCORD_BOT_TOKEN` with `Message Content Intent` enabled, locked to `DISCORD_ALLOWED_USERS`).
 
@@ -448,6 +448,8 @@ $$
       default: deepseek/deepseek-v4-flash
     
     ```
+
+* [x] **5.3b Switch subscription providers (2026-11-15):** Configure OpenAI OAuth (`openai-codex`, `gpt-6-sol`) as primary and Anthropic OAuth (`claude-subscription-directsdk-experimental`, `claude-sonnet-5-5[1m]`) as the only fallback. Update the model switcher, templates, bootstrap and CI/CD; verify provider order and restart the VPS gateway. OpenAI login will be completed separately by the user on the VPS.
 
 * \[x\] **5.4 Configure Discord Bot & `~/.hermes/config.yaml`:**
 

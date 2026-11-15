@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""switch_model — atur model utama Hermes; profil lain otomatis jadi fallback.
+"""switch_model — atur model utama dan fallback Hermes.
 
 Pemakaian:
-  switch_model claude              # Anthropic OAuth utama, OpenRouter cadangan
+  switch_model openai              # OpenAI OAuth utama, Anthropic OAuth cadangan
+  switch_model claude              # Anthropic OAuth utama, OpenAI OAuth cadangan
   switch_model openrouter          # OpenRouter utama, Anthropic OAuth cadangan
-  switch_model claude openrouter   # urutan eksplisit: utama lalu fallback
+  switch_model openai claude       # urutan eksplisit: hanya profil yang disebut
   switch_model --list              # tampilkan profil yang tersedia
 
-Untuk model baru nanti: tambahkan satu entri di PROFILES (dan API key-nya di ~/.hermes/.env).
+Login OpenAI: hermes auth add openai-codex --type oauth
+Login Anthropic: claude auth login (plugin Claude Subscription DirectSDK).
+OpenRouter hanya dipakai jika disebut eksplisit; API key-nya di ~/.hermes/.env.
 """
 import os
 import sys
@@ -17,6 +20,12 @@ import yaml
 CONFIG = os.path.expanduser("~/.hermes/config.yaml")
 
 PROFILES = {
+    "openai": {
+        "provider": "openai-codex",
+        "model": "gpt-6-sol",
+        "base_url": "https://chatgpt.com/backend-api/codex",
+        "api_mode": "codex_responses",
+    },
     "claude": {
         "provider": "claude-subscription-directsdk-experimental",
         "model": "claude-sonnet-5-5[1m]",
@@ -29,6 +38,12 @@ PROFILES = {
         "base_url": "https://openrouter.ai/api/v1",
         "api_mode": "chat_completions",
     },
+}
+
+DEFAULT_FALLBACKS = {
+    "openai": ["claude"],
+    "claude": ["openai"],
+    "openrouter": ["claude"],
 }
 
 # Batas tunggu per provider (detik) supaya provider lambat tidak menggantung lama.
@@ -53,7 +68,8 @@ def main() -> int:
         return 1
 
     order = list(dict.fromkeys(args))
-    order += [name for name in PROFILES if name not in order]
+    if len(args) == 1:
+        order += DEFAULT_FALLBACKS[order[0]]
     primary, fallbacks = order[0], order[1:]
 
     with open(CONFIG) as f:
